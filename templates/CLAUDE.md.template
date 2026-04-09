@@ -14,13 +14,19 @@ You maintain this wiki. You write and update all files in `wiki/`, `index.md`, `
 
 ---
 
-## Retrieval Order
+## Knowledge Base
 
-1. `_hot.md` — active context, ~500 tokens. Resolves ~70% of queries.
-2. `index.md` — full content catalog. Navigate to specific pages.
-3. Individual `wiki/` pages — deep reads.
-4. `qmd query "<question>"` — semantic search fallback.
-Never read more than 5 wiki pages per query.
+Wiki lives at: `{{VAULT_PATH}}/wiki/`
+
+When a task needs knowledge context, follow this retrieval protocol in order:
+
+1. **Hot cache first.** Read `_hot.md` (~500 tokens). Contains active threads, current goals, and key numbers. Resolves most queries without reading further.
+2. **Master index.** Read `index.md` if hot cache isn't enough. Check the Entities, Concepts, Sources, and Analyses sections for relevant pages.
+3. **Deep read.** Open 1–2 relevant wiki pages. Never open more than 5 pages per query.
+4. **Grep fallback.** Search `wiki/**/*.md` by keyword if the page isn't indexed.
+5. **qmd search.** Run `qmd query "<question>"` for semantic search across the full wiki.
+
+**Do NOT read from the wiki** unless the task genuinely needs knowledge context. Execution, content generation, and technical work often do not.
 
 ---
 
