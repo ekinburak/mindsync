@@ -15,7 +15,7 @@ Instead of RAG (re-discovering knowledge on every query), you build a **persiste
 ## Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/mindsync.git
+git clone https://github.com/ekinburak/mindsync.git
 cd mindsync
 bash install.sh
 ```
@@ -23,7 +23,7 @@ bash install.sh
 Or one-liner (after repo is public on GitHub):
 
 ```bash
-curl -s https://raw.githubusercontent.com/YOUR_USERNAME/mindsync/main/install.sh | bash
+curl -s https://raw.githubusercontent.com/ekinburak/mindsync/main/install.sh | bash
 ```
 
 ## Requirements
