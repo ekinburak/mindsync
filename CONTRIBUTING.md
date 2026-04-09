@@ -1,4 +1,4 @@
-# Contributing to llm-wiki
+# Contributing to mindsync
 
 ## Adding or improving skills
 

@@ -1,10 +1,10 @@
 ---
-name: llm-wiki-lint
+name: mindsync-lint
 description: Health-check the LLM Wiki for orphans, contradictions, stale claims, and gaps
-trigger: /llm-wiki lint
+trigger: /mindsync lint
 ---
 
-# /llm-wiki lint
+# /mindsync lint
 
 You are running a health check on the wiki. Follow these steps exactly.
 

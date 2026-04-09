@@ -6,6 +6,6 @@
 ---
 
 ## [{{DATE}}] schema | Initial setup
-Vault scaffolded by /llm-wiki init.
+Vault scaffolded by /mindsync init.
 Structure: raw/, wiki/entities/, wiki/concepts/, wiki/sources/, wiki/analyses/
 Ready for first ingest.

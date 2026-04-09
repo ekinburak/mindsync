@@ -24,7 +24,7 @@ summarize /path/to/paper.pdf > raw/2026-04-09-paper-title.md
 summarize https://podcast-url > raw/2026-04-09-episode-title.md
 ```
 
-After saving to `raw/`, run `/llm-wiki ingest` to process it into the wiki.
+After saving to `raw/`, run `/mindsync ingest` to process it into the wiki.
 
 ## Auto-ingest combo
 

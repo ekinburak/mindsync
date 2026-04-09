@@ -1,10 +1,10 @@
 ---
-name: llm-wiki-init
+name: mindsync-init
 description: Initialize a new LLM Wiki vault with full structure, tooling, and personalized CLAUDE.md
-trigger: /llm-wiki init
+trigger: /mindsync init
 ---
 
-# /llm-wiki init
+# /mindsync init
 
 You are setting up a new LLM Wiki vault. Follow these steps exactly and in order.
 
@@ -139,7 +139,7 @@ sources: []
 ## Workflows
 
 ### INGEST
-Run `/llm-wiki ingest` or triggered automatically by file watcher.
+Run `/mindsync ingest` or triggered automatically by file watcher.
 
 1. Read source
 2. Discuss key takeaways with NAME — ask what to emphasize/skip
@@ -157,7 +157,7 @@ Run `/llm-wiki ingest` or triggered automatically by file watcher.
 4. If filed — update `index.md`, append to `log.md`
 
 ### LINT
-Run `/llm-wiki lint`.
+Run `/mindsync lint`.
 
 1. Read all `wiki/` pages
 2. Report: orphans, missing pages, contradictions, stale claims
@@ -230,7 +230,7 @@ Write VAULT_PATH/log.md substituting WIKI_NAME, DATE:
 ---
 
 ## [DATE] schema | Initial setup
-Vault scaffolded by /llm-wiki init.
+Vault scaffolded by /mindsync init.
 Structure: raw/, wiki/entities/, wiki/concepts/, wiki/sources/, wiki/analyses/
 Ready for first ingest.
 ---
@@ -257,7 +257,7 @@ If yes:
 
 ```bash
 #!/bin/bash
-# watch-raw.sh — Auto-trigger /llm-wiki ingest when files land in raw/
+# watch-raw.sh — Auto-trigger /mindsync ingest when files land in raw/
 # Usage: bash scripts/watch-raw.sh
 # Requires: fswatch (brew install fswatch)
 
@@ -270,7 +270,7 @@ fswatch -0 --event Created "$RAW_DIR" | while IFS= read -r -d '' filepath; do
     continue
   fi
   echo "[$(date '+%Y-%m-%d %H:%M')] New file detected: $filename"
-  echo "Run: /llm-wiki ingest $filepath"
+  echo "Run: /mindsync ingest $filepath"
 done
 ```
 
@@ -306,4 +306,4 @@ Print a summary showing what was created and next steps:
 - qmd configured
 - Watcher status
 - MCP status
-- Next steps: open vault, drop source in raw/, run /llm-wiki ingest
+- Next steps: open vault, drop source in raw/, run /mindsync ingest

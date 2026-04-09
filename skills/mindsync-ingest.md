@@ -1,10 +1,10 @@
 ---
-name: llm-wiki-ingest
+name: mindsync-ingest
 description: Interactively ingest a new source into the LLM Wiki
-trigger: /llm-wiki ingest
+trigger: /mindsync ingest
 ---
 
-# /llm-wiki ingest
+# /mindsync ingest
 
 You are ingesting a new source into the wiki. Follow these steps exactly.
 
