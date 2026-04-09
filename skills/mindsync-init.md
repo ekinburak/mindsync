@@ -15,7 +15,7 @@ Ask the following questions one at a time. Wait for each answer before asking th
 1. "What's your name?"
 2. "What is this wiki for? (one sentence — e.g. 'my personal second brain' or 'research on climate tech')"
 3. "What is the #1 priority for this assistant? (e.g. 'help me understand my patterns and make better decisions')"
-4. "What is the full path to the vault directory? (e.g. ~/Documents/mywiki)"
+4. "Where should I create your wiki vault? Enter the full path to a folder — it will be created if it doesn't exist. (e.g. ~/Documents/mywiki, ~/Dropbox/brain, /Users/you/notes/research)"
 
 Store answers as: NAME, DOMAIN, PRIORITY, VAULT_PATH.
 
