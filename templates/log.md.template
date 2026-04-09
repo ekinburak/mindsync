@@ -1,0 +1,11 @@
+# {{WIKI_NAME}} log
+
+> Append-only. Format: `## [YYYY-MM-DD] <type> | <title>`
+> Types: ingest | query | lint | schema
+
+---
+
+## [{{DATE}}] schema | Initial setup
+Vault scaffolded by /llm-wiki init.
+Structure: raw/, wiki/entities/, wiki/concepts/, wiki/sources/, wiki/analyses/
+Ready for first ingest.
