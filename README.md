@@ -156,6 +156,8 @@ bash your-wiki/scripts/watch-raw.sh
 
 ## Roadmap / TODO
 
+> Ideas sourced from building mindsync + Karpathy's original [tweet thread](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) on the LLM Wiki pattern.
+
 ### 🔴 High priority
 
 **Level 3 auto-ingest via Claude Code hooks** *(most important)*
@@ -164,36 +166,60 @@ The current file watcher (`watch-raw.sh`) detects new files in `raw/` and prints
 **`/mindsync query` skill**
 A dedicated query skill that enforces the retrieval order (`_hot.md` → `index.md` → pages → `qmd`), always offers to file valuable answers as analyses, and enforces the 5-page read limit. Currently queries rely on CLAUDE.md rules alone.
 
+**Rich output formats: Marp + matplotlib**
+Karpathy: *"instead of getting answers in text/terminal, I like to have it render markdown files, slide shows (Marp format), or matplotlib images, all of which I then view again in Obsidian."*
+`/mindsync export` should support: Marp slide decks (`.md` with Marp frontmatter), matplotlib charts (`.png` via Python), and structured JSON. All outputs auto-filed back into `wiki/analyses/` so they compound in the knowledge base.
+
+**Web search during lint (missing data imputation)**
+Karpathy: *"impute missing data with web searchers."*
+When lint finds a gap — a concept page with thin coverage, an entity with outdated info — it should trigger a web search (via `agent-browser` or `summarize`) to fill the gap automatically. Lint goes from a report to an active wiki enhancer.
+
 **Scheduled `qmd embed`**
 After bulk ingestion the vector index goes stale. A cron job (or Claude Code scheduled trigger) should run `qmd embed` nightly to keep semantic search accurate.
 
 ### 🟡 Medium priority
 
+**New article candidate suggestions during lint**
+Karpathy: *"find interesting connections for new article candidates."*
+Beyond flagging missing pages, lint should proactively suggest entirely new concept or entity pages that don't yet exist — based on patterns and connections it sees across the wiki. "You mention X in 5 different sources but have no concept page for it."
+
+**Repo and dataset ingestion**
+Karpathy: *"articles, papers, repos, datasets, images."*
+`/mindsync ingest` currently handles articles, PDFs, and videos. Add support for: GitHub repos (README + key files), CSV/JSON datasets (summary + column descriptions), and image collections (captioned via vision model).
+
+**Web UI for wiki search**
+Karpathy: *"vibe coded a small search engine over the wiki, which I use directly in a web UI."*
+A minimal local web interface (`localhost:3000`) wrapping `qmd` — shows search results as cards with backlinks, previews, and one-click Obsidian deep links. Built with a simple Node/Python server, vibe-coded.
+
 **`/mindsync status` skill**
-Quick dashboard: how many sources, entities, concepts, analyses; last ingest date; `_hot.md` token count; whether qmd index is fresh. Useful at the start of every session.
+Quick dashboard: source count, entity/concept/analysis counts, last ingest date, `_hot.md` token count, whether qmd index is fresh. Useful at session start.
 
 **Output auto-filing**
 When `summarize` or `agent-browser` produces output during a session, automatically route it to `raw/` and queue it for ingest — without copy-paste. Requires hooking into tool output events.
 
+**Domain-specific ingest templates**
+Custom templates per source type: journal entries get a different structure than research papers, which differ from podcast transcripts or GitHub repos.
+
 **`/mindsync sync` for team wikis**
 Multi-user support: merge wiki updates from multiple contributors, detect conflicts between pages edited by different people, use git branches per contributor.
 
-**Domain-specific ingest templates**
-Custom templates per source type: journal entries get a different structure than research papers, which differ from podcast transcripts.
-
 ### 🟢 Nice to have
 
-**Graph view export**
-Generate a `graph.json` from wiki cross-references for visualization in Obsidian, D3.js, or Gephi.
+**Synthetic data generation + fine-tuning**
+Karpathy: *"think about synthetic data generation + finetuning to have your LLM 'know' the data in its weights instead of just context windows."*
+Export the wiki as a fine-tuning dataset (Q&A pairs generated from wiki pages + sources). Fine-tune a local model (Mistral, Llama) so it internalizes your knowledge base. `/mindsync finetune` generates the dataset; you run the training job separately.
 
-**`/mindsync export`**
-Export wiki as: Marp slide deck, PDF report, structured JSON, or Anki flashcards.
+**Graph view export**
+Generate a `graph.json` from wiki cross-references for visualization in Obsidian graph view, D3.js, or Gephi. Makes the shape and density of your knowledge visible at a glance.
 
 **Contradiction resolution workflow**
-When lint flags a contradiction, a guided workflow to resolve it: show both claims, pick the correct one, update both pages, log the resolution.
+When lint flags a contradiction, a guided workflow to resolve it: show both claims, pick the correct one, update both pages, log the resolution decision.
 
 **`/mindsync search <query>`**
 Shell alias that calls `qmd query` and formats results as clickable Obsidian links. Skip opening Claude for quick lookups.
+
+**Scale playbook**
+Karpathy's wiki: ~100 articles, ~400K words. At that scale, `index.md` navigation starts to strain. Document the transition plan: when to introduce domain sub-indexes (`_index-health.md`, `_index-career.md`), when to switch from full-page reads to chunk-level retrieval, when fine-tuning becomes worth it.
 
 ---
 
