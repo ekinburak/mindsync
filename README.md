@@ -71,6 +71,49 @@ Each vault is self-contained. Run `/mindsync init` in a different folder to crea
 
 During `/mindsync init`, you can optionally set up a file watcher. Once running, any file dropped into `raw/` automatically triggers the ingest flow. Requires `fswatch` (`brew install fswatch`).
 
+## Roadmap / TODO
+
+### 🔴 High priority
+
+**Level 3 auto-ingest via Claude Code hooks** *(most important)*
+The current file watcher (`watch-raw.sh`) detects new files in `raw/` and prints a message — but you still have to manually run `/mindsync ingest`. The real goal is **zero-touch ingestion**: Claude Code supports hooks (shell commands that fire on events). A `PostToolUse` hook watching for file writes to `raw/` could automatically trigger the full ingest flow — discuss, write wiki pages, update index and log — without you saying anything. You drop a file, the wiki updates itself.
+
+**`/mindsync query` skill**
+A dedicated query skill that enforces the retrieval order (`_hot.md` → `index.md` → pages → `qmd`), always offers to file valuable answers as analyses, and enforces the 5-page read limit. Currently queries rely on CLAUDE.md rules alone.
+
+**Scheduled `qmd embed`**
+After bulk ingestion the vector index goes stale. A cron job (or Claude Code scheduled trigger) should run `qmd embed` nightly to keep semantic search accurate.
+
+### 🟡 Medium priority
+
+**`/mindsync status` skill**
+Quick dashboard: how many sources, entities, concepts, analyses; last ingest date; `_hot.md` token count; whether qmd index is fresh. Useful at the start of every session.
+
+**Output auto-filing**
+When `summarize` or `agent-browser` produces output during a session, automatically route it to `raw/` and queue it for ingest — without copy-paste. Requires hooking into tool output events.
+
+**`/mindsync sync` for team wikis**
+Multi-user support: merge wiki updates from multiple contributors, detect conflicts between pages edited by different people, use git branches per contributor.
+
+**Domain-specific ingest templates**
+The current ingest skill uses a generic template. Custom templates per source type: journal entries get a different structure than research papers, which differ from podcast transcripts.
+
+### 🟢 Nice to have
+
+**Graph view export**
+Generate a `graph.json` from wiki cross-references that tools like Obsidian, D3.js, or Gephi can visualize. Makes the "shape" of your knowledge visible.
+
+**`/mindsync export`**
+Export wiki as: Marp slide deck, PDF report, structured JSON, or Anki flashcards. Useful for sharing knowledge or studying from it.
+
+**Contradiction resolution workflow**
+When lint flags a contradiction between two pages, a guided workflow to resolve it: show both claims, ask which is correct, update both pages, log the resolution.
+
+**Search CLI integration**
+`/mindsync search <query>` — shell alias that calls `qmd query` and formats results as clickable Obsidian links. Skip opening Claude entirely for quick lookups.
+
+---
+
 ## License
 
 MIT
