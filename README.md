@@ -147,14 +147,32 @@ If you don't install agent-browser, `summarize` covers most ingest use cases wit
 
 Each vault is fully self-contained. Run `/mindsync init` in any folder to create a new wiki for a different domain — a research project, a team knowledge base, a book companion. Each gets its own `CLAUDE.md` tuned to its purpose, its own qmd collection, and its own retrieval configuration.
 
-## Auto-ingest with file watcher
+## Auto-ingest
 
-During `/mindsync init`, you can optionally set up a file watcher (`scripts/watch-raw.sh`). Once running, any file dropped into `raw/` automatically triggers the ingest flow. Requires `fswatch`:
+mindsync has two levels of auto-ingest, set up during `/mindsync init`:
+
+### Level 2 — File watcher (notifies you)
+
+`scripts/watch-raw.sh` uses `fswatch` to detect new files dropped into `raw/` and prints a terminal notification. You then tell Claude to ingest. Requires `fswatch`:
 
 ```bash
 brew install fswatch
 bash your-wiki/scripts/watch-raw.sh
 ```
+
+### Level 3 — Claude Code hook (acts automatically)
+
+`scripts/hook-auto-ingest.sh` is a Claude Code `PostToolUse` hook. It fires whenever Claude itself writes a file to `raw/` — for example, after fetching a URL with `summarize` or browsing with `agent-browser`. Claude sees the hook output and immediately runs the ingest flow without you typing anything.
+
+**What's automatic vs. manual:**
+
+| How the file lands in raw/ | What happens |
+|----------------------------|-------------|
+| Claude fetched it (summarize, agent-browser) | Hook fires → ingest runs automatically |
+| You dropped it manually (Finder, terminal) | Say "ingest" → Claude processes it |
+| You forgot you dropped something | `/mindsync status` shows unprocessed count |
+
+The manual drop case is intentionally one word. Curation — deciding what enters the wiki — is a deliberate act. The hook closes the loop for the cases where Claude is already doing the work.
 
 ## Roadmap / TODO
 
