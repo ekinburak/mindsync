@@ -304,13 +304,50 @@ If yes, show this JSON to add to Claude Code settings (~/.claude/settings.json u
 }
 ```
 
-## Step 7: Confirm
+## Step 7: Auto-ingest hook (optional)
+
+Ask: "Want zero-touch auto-ingest? I can set up a Claude Code hook that automatically runs /mindsync ingest whenever a file lands in raw/ — no manual command needed. (y/n)"
+
+If yes:
+
+Copy the hook script into the vault:
+```bash
+mkdir -p VAULT_PATH/scripts
+cp "$(dirname "$0")/../scripts/hook-auto-ingest.sh" VAULT_PATH/scripts/hook-auto-ingest.sh
+chmod +x VAULT_PATH/scripts/hook-auto-ingest.sh
+```
+
+Write VAULT_PATH/.claude/settings.json (create the file, or merge with existing):
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hook-auto-ingest.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Tell the user: "Hook installed. Drop any file into raw/ and I'll ingest it automatically."
+
+If no: skip this step.
+
+## Step 8: Confirm
 
 Print a summary showing what was created and next steps:
 - Vault path
 - CLAUDE.md written (personalized for NAME)
 - _hot.md, index.md, log.md created
 - qmd configured
-- Watcher status
+- Watcher status (Level 2 fswatch)
+- Auto-ingest hook status (Level 3 Claude Code hook)
 - MCP status
-- Next steps: open vault, drop source in raw/, run /mindsync ingest
+- Next steps: open vault, drop source in raw/, run /mindsync ingest (or just drop and wait if hook is enabled)

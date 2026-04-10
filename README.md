@@ -163,7 +163,7 @@ bash your-wiki/scripts/watch-raw.sh
 
 ### 🔴 High priority
 
-- [ ] **Level 3 auto-ingest via Claude Code hooks** 🔵 *(most impactful)*
+- [x] **Level 3 auto-ingest via Claude Code hooks** 🔵 *(most impactful)*
   The current file watcher (`watch-raw.sh`) detects new files in `raw/` but you still run `/mindsync ingest` manually. The goal is **zero-touch ingestion**: a Claude Code `PostToolUse` hook fires on any write to `raw/`, automatically triggering the full ingest flow — wiki pages updated, index and log maintained — without you saying anything. Drop a file, the wiki updates itself.
 
 - [x] **`/mindsync query` skill** 🟢
