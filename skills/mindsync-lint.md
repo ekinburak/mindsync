@@ -43,10 +43,23 @@ For each: the page, the claim, and the newer source that supersedes it.
 Pages missing required frontmatter fields (type, sources, created, updated).
 For each: the page and which fields are missing.
 
+### Article candidates
+Karpathy: *"find interesting connections for new article candidates."*
+
+For each term, concept, or entity that:
+- Appears in 3 or more source or entity pages WITHOUT its own concept page, OR
+- Is cross-referenced frequently but only has a stub (under 100 words)
+
+List it as an article candidate:
+
+**Candidate:** [[concepts/candidate-name]]
+**Mentioned in:** [[sources/a]], [[sources/b]], [[entities/c]]
+**Suggested angle:** one sentence on what the page should cover
+
 ### Suggestions
-- New questions worth investigating
-- New sources to look for
-- `_hot.md` entries that appear resolved or stale
+- New questions worth investigating based on gaps in the wiki
+- New external sources to look for (be specific: "a paper on X", "an article about Y")
+- `_hot.md` entries that appear resolved or no longer active
 
 ## Step 4: Log
 
@@ -56,5 +69,6 @@ Append to `log.md`:
 Orphans: N found
 Missing pages: N found
 Contradictions: N found
+Article candidates: N suggested
 Suggestions: N
 ```
