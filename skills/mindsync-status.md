@@ -53,7 +53,13 @@ If qmd is installed, note when the index was last built. If it hasn't been run s
 
 ## Step 5: Output the dashboard
 
-Print this exact format, filling in values from Steps 1–4:
+First, run:
+
+```bash
+clear
+```
+
+Then print this exact format, filling in values from Steps 1–4:
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
