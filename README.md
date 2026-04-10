@@ -12,6 +12,7 @@ Instead of RAG (re-discovering knowledge on every query), you build a **persiste
 | `/mindsync ingest` | Interactive ingest of a new source (URL, file, paste, video, PDF) |
 | `/mindsync query` | Research a question against the wiki — outputs as text, markdown, or Marp slides |
 | `/mindsync lint` | Health-check: finds orphans, contradictions, gaps, article candidates |
+| `/mindsync status` | Quick dashboard: page counts, last activity, hot cache size, qmd index freshness |
 
 ## Install
 
@@ -183,7 +184,7 @@ bash your-wiki/scripts/watch-raw.sh
 
 ### 🟡 Medium priority
 
-- [ ] **`/mindsync status` skill** 🟢
+- [x] **`/mindsync status` skill** 🟢
   Quick dashboard at session start: source count, entity/concept/analysis counts, last ingest date, `_hot.md` token count, qmd index freshness.
 
 - [x] **New article candidate suggestions during lint** 🟢
