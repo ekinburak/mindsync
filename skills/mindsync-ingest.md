@@ -42,7 +42,15 @@ Then read the saved file.
 **3D — Paste text:**
 Save the pasted content as `raw/<DATE>-freeform.md`. Then read it.
 
-## Step 4: Discuss
+## Step 4: Detect source type and discuss
+
+Detect the source type from the content:
+- **Article / blog post** — has a byline, URL, publication date
+- **Research paper** — has abstract, methodology, references section
+- **Podcast / video transcript** — has speaker labels or timestamp markers
+- **Journal entry** — first-person, dated, personal reflection
+- **GitHub repo** — has README, code structure, technical documentation
+- **Dataset / CSV** — tabular data with column headers and rows
 
 Show the user: "Here are the key takeaways I see:" followed by a numbered list of 3-5 key points.
 
@@ -52,11 +60,51 @@ Wait for the user's response before writing anything.
 
 ## Step 5: Write wiki pages
 
-Write `wiki/sources/<DATE>-<SLUG>.md` with:
-- YAML frontmatter (title, type: source, tags, created, updated, sources array)
+Use the source type detected in Step 4 to choose the right template:
+
+**Article / blog post:**
 - Summary: 2-3 sentence overview
 - Key claims: bullet list of main points
-- Notable quotes: 1-3 direct quotes if present
+- Notable quotes: 1-3 direct quotes
+- Author's argument: what point is the author making overall?
+
+**Research paper:**
+- Summary: what was studied and what was found
+- Methodology: how they studied it (1-2 sentences)
+- Key findings: numbered list with effect sizes or stats where present
+- Limitations: what the authors say the study can't conclude
+- Notable quotes: 1-2 quotes from abstract or conclusion
+
+**Podcast / video transcript:**
+- Guest / host: who is speaking
+- Summary: topic and main thread of conversation
+- Key insights: bullet list of distinct ideas raised
+- Memorable moments: notable exchanges or quotes
+- Actionable takeaways: what to do or explore based on this
+
+**Journal entry:**
+- Date: when it was written
+- Mood / tone: one word
+- Key themes: what the entry is processing
+- Insights: any conclusions or realizations reached
+- Open questions: unresolved threads worth tracking
+
+**GitHub repo:**
+- What it does: one sentence
+- Tech stack: languages, frameworks, dependencies
+- Key components: main files or modules and their purpose
+- How it's relevant: why this repo matters to the wiki domain
+- Links: repo URL, any related papers or articles
+
+**Dataset / CSV:**
+- What it contains: rows represent X, columns are Y
+- Source and date: where it came from, when collected
+- Key statistics: row count, notable columns, value ranges
+- Potential uses: what questions this data could answer
+- Gaps: what's missing or unreliable
+
+Write `wiki/sources/<DATE>-<SLUG>.md` with the chosen template plus:
+- YAML frontmatter (title, type: source, tags, created, updated, sources array)
 - Links to all entities and concepts touched using Obsidian double-bracket link syntax
 
 For each entity and concept mentioned:

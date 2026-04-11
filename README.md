@@ -10,8 +10,9 @@ Instead of RAG (re-discovering knowledge on every query), you build a **persiste
 |---------|-------------|
 | `/mindsync init` | One-time setup: creates vault structure, personalized CLAUDE.md, installs tools |
 | `/mindsync ingest` | Interactive ingest of a new source (URL, file, paste, video, PDF) |
+| `/mindsync search` | Semantic search across the wiki via qmd — returns ranked Obsidian links |
 | `/mindsync query` | Research a question against the wiki — outputs as text, markdown, or Marp slides |
-| `/mindsync lint` | Health-check: finds orphans, contradictions, gaps, article candidates |
+| `/mindsync lint` | Health-check: finds orphans, contradictions, gaps, article candidates, auto-fills via web |
 | `/mindsync status` | Quick dashboard: page counts, last activity, hot cache size, qmd index freshness |
 
 ## Install
@@ -220,7 +221,7 @@ The manual drop case is intentionally one word. Curation — deciding what enter
 - [ ] **Output auto-filing** 🟡
   When `summarize` or `agent-browser` produces output during a session, automatically route it to `raw/` and queue it for ingest — no copy-paste. Requires Claude Code tool output hooks.
 
-- [ ] **Domain-specific ingest templates** 🟡
+- [x] **Domain-specific ingest templates** 🟡
   Custom templates per source type: journal entries, research papers, podcast transcripts, and GitHub repos each get a purpose-built structure.
 
 - [ ] **`/mindsync sync` for team wikis** 🔵
@@ -228,7 +229,7 @@ The manual drop case is intentionally one word. Curation — deciding what enter
 
 ### 🟢 Nice to have
 
-- [ ] **`/mindsync search <query>`** 🟢
+- [x] **`/mindsync search <query>`** 🟢
   Shell alias wrapping `qmd query`, outputting results as clickable Obsidian links. Quick lookups without opening Claude.
 
 - [ ] **Graph view export** 🟢
