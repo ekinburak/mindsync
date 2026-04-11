@@ -23,6 +23,7 @@ cp "$REPO_DIR/skills/mindsync-search.md" "$SKILLS_DIR/"
 
 # Scripts (referenced by skills at runtime)
 cp "$REPO_DIR/scripts/hook-auto-ingest.sh" "$SCRIPTS_DIR/"
+cp "$REPO_DIR/scripts/hook-session-end.sh" "$SCRIPTS_DIR/"
 cp "$REPO_DIR/scripts/schedule-embed.sh" "$SCRIPTS_DIR/"
 cp "$REPO_DIR/scripts/generate-graph.sh" "$SCRIPTS_DIR/"
 chmod +x "$SCRIPTS_DIR/"*.sh

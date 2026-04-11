@@ -310,11 +310,13 @@ Ask: "Want zero-touch auto-ingest? I can set up a Claude Code hook that automati
 
 If yes:
 
-Copy the hook script into the vault:
+Copy the hook scripts into the vault:
 ```bash
 mkdir -p VAULT_PATH/scripts
 cp "$HOME/.claude/scripts/mindsync/hook-auto-ingest.sh" VAULT_PATH/scripts/hook-auto-ingest.sh
+cp "$HOME/.claude/scripts/mindsync/hook-session-end.sh" VAULT_PATH/scripts/hook-session-end.sh
 chmod +x VAULT_PATH/scripts/hook-auto-ingest.sh
+chmod +x VAULT_PATH/scripts/hook-session-end.sh
 ```
 
 Write VAULT_PATH/.claude/settings.json (create the file, or merge with existing):
@@ -328,6 +330,16 @@ Write VAULT_PATH/.claude/settings.json (create the file, or merge with existing)
           {
             "type": "command",
             "command": "bash scripts/hook-auto-ingest.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hook-session-end.sh"
           }
         ]
       }

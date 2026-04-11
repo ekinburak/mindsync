@@ -172,32 +172,66 @@ Output: `graph.json` in your vault root with nodes (pages) and edges (links betw
 
 Each vault is fully self-contained. Run `/mindsync init` in any folder to create a new wiki for a different domain — a research project, a team knowledge base, a book companion. Each gets its own `CLAUDE.md` tuned to its purpose, its own qmd collection, and its own retrieval configuration.
 
-## Auto-ingest
+## How automation works
 
-mindsync has two levels of auto-ingest, set up during `/mindsync init`:
+This is the most important thing to understand about mindsync. **The wiki grows during sessions, not between them.** Every time you open Claude Code in your vault and run a skill, it compounds knowledge. Between sessions, background jobs keep the search index fresh.
 
-### Level 2 — File watcher (notifies you)
+### What happens automatically (no input needed)
 
-`scripts/watch-raw.sh` uses `fswatch` to detect new files dropped into `raw/` and prints a terminal notification. You then tell Claude to ingest. Requires `fswatch`:
+| Trigger | What fires | Result |
+|---------|-----------|--------|
+| Claude writes a file to `raw/` (e.g. after fetching a URL) | `PostToolUse` hook | Ingest runs immediately |
+| Any Claude Code session ends in the vault | `Stop` hook | qmd index rebuilt silently in background |
+| Every night at 2am | cron job (`schedule-embed.sh`) | qmd index rebuilt as a safety net |
 
-```bash
-brew install fswatch
-bash your-wiki/scripts/watch-raw.sh
+### What needs one word from you
+
+| You do | You say | What happens |
+|--------|---------|-------------|
+| Drop a file in `raw/` via Finder | "ingest" | Full ingest flow runs |
+| Want an answer from your wiki | `/mindsync query` | Retrieval + synthesis + optional filing |
+| Want to find something | `/mindsync search sleep habits` | Ranked Obsidian links returned |
+| Want a health check | `/mindsync lint` | Gaps found, web enrichment offered |
+| Want a dashboard | `/mindsync status` | Counts, last activity, index freshness |
+
+### How raw/ → wiki/ works
+
+Files in `raw/` don't move automatically — they are intentionally immutable source records. What happens is:
+1. Claude **reads** the file in `raw/`
+2. Claude **writes** structured pages into `wiki/sources/`, `wiki/entities/`, `wiki/concepts/`
+3. Claude **updates** `index.md` and appends to `log.md`
+4. The `Stop` hook rebuilds qmd so the new pages are searchable
+
+The `raw/` file stays untouched forever as your source of truth.
+
+### How wiki stays fresh after every session
+
+When you close a Claude Code session in your vault, `hook-session-end.sh` fires automatically. If any wiki files changed during the session, it runs `qmd embed` in the background — so the next time you search, the index reflects everything that was written. You never need to manually run `qmd embed` unless you've been bulk-dropping files outside of Claude.
+
+### Best practices for a living wiki
+
+1. **Open Claude Code in your vault directory** — not a parent folder. This activates `CLAUDE.md` and all hooks.
+2. **Start every session with `/mindsync status`** — see what's changed, what's unprocessed, whether the index is fresh.
+3. **Drop sources often, ingest in batches** — drop 3-5 files, then say "ingest all of them". Claude handles sequentially.
+4. **Run `/mindsync lint` weekly** — it finds gaps, suggests new articles, and offers to fill them via web search.
+5. **Keep `_hot.md` under 500 words** — it's your active context. Prune resolved items. Status warns you when it's too long.
+6. **Trust the compounding** — the wiki gets more useful the more you use it. After 20 sources, queries start connecting dots you hadn't noticed.
+
+### Cron jobs set up by init
+
+`/mindsync init` optionally runs `bash scripts/schedule-embed.sh <vault-path>` which installs:
+
+```
+0 2 * * * qmd embed >> ~/.mindsync-embed.log 2>&1
 ```
 
-### Level 3 — Claude Code hook (acts automatically)
+This is a safety net. In practice the `Stop` hook keeps the index fresh after every session.
 
-`scripts/hook-auto-ingest.sh` is a Claude Code `PostToolUse` hook. It fires whenever Claude itself writes a file to `raw/` — for example, after fetching a URL with `summarize` or browsing with `agent-browser`. Claude sees the hook output and immediately runs the ingest flow without you typing anything.
-
-**What's automatic vs. manual:**
-
-| How the file lands in raw/ | What happens |
-|----------------------------|-------------|
-| Claude fetched it (summarize, agent-browser) | Hook fires → ingest runs automatically |
-| You dropped it manually (Finder, terminal) | Say "ingest" → Claude processes it |
-| You forgot you dropped something | `/mindsync status` shows unprocessed count |
-
-The manual drop case is intentionally one word. Curation — deciding what enters the wiki — is a deliberate act. The hook closes the loop for the cases where Claude is already doing the work.
+To check your cron is running:
+```bash
+crontab -l | grep qmd
+cat ~/.mindsync-embed.log
+```
 
 ## Roadmap / TODO
 
