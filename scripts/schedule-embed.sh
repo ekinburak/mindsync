@@ -1,11 +1,15 @@
 #!/bin/bash
-# schedule-embed.sh — Keep qmd index fresh whenever wiki files change
+# schedule-embed.sh — Watch vault for changes, keep qmd fresh, flag pending ingests
 # Usage: bash scripts/schedule-embed.sh <wiki-path>
 # Example: bash scripts/schedule-embed.sh ~/Documents/mywiki
 #
-# On macOS: installs a launchd job that watches wiki/ and raw/ for changes,
-#           running qmd embed within seconds of any file modification.
-# On Linux: falls back to a nightly cron job at 2am.
+# Installs two launchd jobs (macOS) or one cron job (Linux):
+#   1. Watch wiki/  → run qmd embed when wiki pages change
+#   2. Watch raw/   → write .pending-ingest flag + run qmd embed when sources arrive
+#
+# The .pending-ingest flag is read by hook-prompt-submit.sh (UserPromptSubmit hook)
+# which triggers Claude to ingest the files. This avoids running `find` on every
+# user message — the hook only does a single file-existence check.
 
 set -e
 
@@ -17,7 +21,6 @@ if [ -z "$WIKI_PATH" ]; then
   exit 1
 fi
 
-# Expand ~ to full path
 WIKI_PATH="${WIKI_PATH/#\~/$HOME}"
 
 if [ ! -d "$WIKI_PATH/wiki" ]; then
@@ -31,64 +34,79 @@ if ! which qmd &>/dev/null; then
 fi
 
 QMD_PATH="$(which qmd)"
+SCRIPT_DIR="$HOME/.claude/scripts/mindsync"
 LOG="$HOME/.mindsync-embed.log"
-LABEL="com.mindsync.embed.$(basename "$WIKI_PATH")"
+VAULT_NAME="$(basename "$WIKI_PATH")"
 
-# ── macOS: launchd with WatchPaths ────────────────────────────��───────────────
+# ── macOS: two launchd jobs ───────────────────────────────────────────────────
 if [[ "$OSTYPE" == "darwin"* ]]; then
-  PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 
-  # Remove existing job if present
-  if launchctl list "$LABEL" &>/dev/null; then
-    launchctl unload "$PLIST" 2>/dev/null || true
-  fi
+  install_plist() {
+    local label="$1"
+    local watch_path="$2"
+    local plist="$HOME/Library/LaunchAgents/$label.plist"
+    local program_args="$3"
 
-  cat > "$PLIST" << EOF
+    if launchctl list "$label" &>/dev/null; then
+      launchctl unload "$plist" 2>/dev/null || true
+    fi
+
+    cat > "$plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>$LABEL</string>
-
+  <string>$label</string>
   <key>ProgramArguments</key>
-  <array>
-    <string>$QMD_PATH</string>
-    <string>embed</string>
-  </array>
-
-  <!-- Fire when wiki/ or raw/ files change — not on a fixed schedule -->
+  $program_args
   <key>WatchPaths</key>
   <array>
-    <string>$WIKI_PATH/wiki</string>
-    <string>$WIKI_PATH/raw</string>
+    <string>$watch_path</string>
   </array>
-
-  <!-- Debounce: wait 30s after last change before running -->
   <key>ThrottleInterval</key>
   <integer>30</integer>
-
   <key>StandardOutPath</key>
   <string>$LOG</string>
   <key>StandardErrorPath</key>
   <string>$LOG</string>
-
   <key>RunAtLoad</key>
   <false/>
 </dict>
 </plist>
 EOF
+    launchctl load "$plist"
+    echo "  Installed: $label"
+    echo "  Watches:   $watch_path"
+  }
 
-  launchctl load "$PLIST"
-  echo "Installed: launchd job '$LABEL'"
-  echo "Trigger:   any change to $WIKI_PATH/wiki/ or $WIKI_PATH/raw/"
-  echo "Debounce:  runs 30 seconds after the last file change"
+  echo "Installing launchd watchers for $VAULT_NAME..."
+  echo ""
+
+  # Job 1: wiki/ changes → qmd embed only
+  install_plist \
+    "com.mindsync.wiki.$VAULT_NAME" \
+    "$WIKI_PATH/wiki" \
+    "<array><string>$QMD_PATH</string><string>embed</string></array>"
+
+  echo ""
+
+  # Job 2: raw/ changes → flag .pending-ingest + qmd embed
+  install_plist \
+    "com.mindsync.raw.$VAULT_NAME" \
+    "$WIKI_PATH/raw" \
+    "<array><string>$SCRIPT_DIR/on-raw-change.sh</string><string>$WIKI_PATH</string></array>"
+
+  echo ""
+  echo "Debounce:  30s after last file change"
   echo "Log:       $LOG"
   echo ""
-  echo "To remove: launchctl unload $PLIST && rm $PLIST"
+  echo "To remove:"
+  echo "  launchctl unload ~/Library/LaunchAgents/com.mindsync.wiki.$VAULT_NAME.plist"
+  echo "  launchctl unload ~/Library/LaunchAgents/com.mindsync.raw.$VAULT_NAME.plist"
 
-# ── Linux: fallback to cron ───────────────────────────────────────────────────
+# ── Linux: cron fallback ──────────────────────────────────────────────────────
 else
   CRON_JOB="0 2 * * * $QMD_PATH embed >> $LOG 2>&1"
 
@@ -97,7 +115,7 @@ else
     crontab -l | grep "qmd embed"
   else
     (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
-    echo "Scheduled: qmd embed runs nightly at 2am (cron fallback — launchd not available on Linux)"
+    echo "Scheduled: qmd embed nightly at 2am (Linux — launchd not available)"
     echo "Log: $LOG"
     echo ""
     echo "To remove: crontab -e and delete the qmd embed line"

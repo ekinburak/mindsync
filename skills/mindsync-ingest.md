@@ -141,10 +141,11 @@ Key insight: one sentence
 
 After updating indexes, run:
 ```bash
+rm -f raw/.pending-ingest
 touch raw/.last-ingest
 ```
 
-This updates the marker file so the auto-detect hook knows this file has been processed.
+This clears the pending flag (so the hook stops firing) and updates the timestamp marker (so the launchd watcher knows what's already been processed).
 
 ## Step 7: Hot cache check
 
