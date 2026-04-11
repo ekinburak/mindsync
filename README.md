@@ -23,11 +23,14 @@ cd mindsync
 bash install.sh
 ```
 
-Or one-liner (requires repo to be public):
+You can delete the repo after installing — everything needed is copied to `~/.claude/`:
 
-```bash
-curl -s https://raw.githubusercontent.com/ekinburak/mindsync/main/install.sh | bash
-```
+| What | Where | Purpose |
+|------|-------|---------|
+| 6 skill files | `~/.claude/skills/mindsync-*.md` | Auto-loaded by Claude Code globally |
+| 3 scripts | `~/.claude/scripts/mindsync/` | Used by skills at runtime (hook, embed, graph) |
+
+**One install, works everywhere.** The skills are available in every Claude Code session on your machine — any folder, any project, any wiki.
 
 ## Requirements
 
@@ -36,14 +39,22 @@ curl -s https://raw.githubusercontent.com/ekinburak/mindsync/main/install.sh | b
 
 ## Quickstart
 
-1. Install skills (above)
-2. Open Claude Code in any empty folder
+1. Install (above) — once, then you can delete the repo
+2. Open Claude Code **in any folder** — a new folder, an existing project, anywhere
 3. Run `/mindsync init` and answer 4 questions:
    - Your name
    - What this wiki is for
    - The assistant's #1 priority
-   - Where to create the vault (any path — created automatically)
-4. Drop a source into `raw/` and run `/mindsync ingest`
+   - Where to create the vault (any path — created automatically if it doesn't exist)
+4. Init sets up everything automatically:
+   - Full vault structure (`raw/`, `wiki/`, indexes, log)
+   - Personalized `CLAUDE.md` auto-loaded by Claude Code
+   - qmd semantic search configured
+   - Auto-ingest hook wired into the vault (optional)
+   - File watcher for `raw/` (optional)
+5. Drop a source into `raw/` and say "ingest" — or run `/mindsync ingest`
+
+**Multiple wikis:** Run `/mindsync init` in any folder to create a separate wiki for a different domain. Each vault is fully independent with its own `CLAUDE.md`, qmd collection, and hook configuration.
 
 ## Vault structure (created by init)
 
