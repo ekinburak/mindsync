@@ -73,6 +73,47 @@ your-wiki/
     └── analyses/    ← filed query results, comparisons, syntheses
 ```
 
+## How ingestion works
+
+**Claude is the ingestion model.** There is no separate embedding or extraction pipeline. When you run `/mindsync ingest`, Claude reads the source file and writes structured wiki pages using its own language understanding — the same model powering your conversation.
+
+### mindsync vs RAG
+
+Most knowledge tools use RAG (Retrieval-Augmented Generation): embed raw text, store vectors, retrieve at query time. The source stays as-is and retrieval does all the work.
+
+mindsync does the opposite:
+
+```
+RAG (retrieve-then-understand):
+  source → embed raw text → store vectors
+  query  → retrieve chunks → LLM reads raw text → answer
+
+mindsync (understand-then-store):
+  source → Claude reads + understands → writes structured wiki pages → embed pages
+  query  → read index + pages → answer from already-synthesized knowledge
+```
+
+The expensive, intelligent step happens **once at ingest time**. Queries search against structured, cross-referenced knowledge — not raw chunks of text. This is why the wiki compounds: every source makes the whole knowledge base smarter, not just bigger.
+
+### Two AI layers
+
+| Layer | Model | Runs when | Does what |
+|-------|-------|-----------|-----------|
+| **Ingestion & queries** | Claude (your active session) | During `/mindsync ingest`, `/mindsync query`, `/mindsync lint` | Reads sources, extracts entities and concepts, writes wiki pages, synthesizes answers |
+| **Semantic search index** | qmd's local embedding model (on-device, no data leaves your machine) | After ingest via launchd/Stop hook | Embeds wiki pages for vector search — used as fallback when index.md isn't enough |
+
+### What Claude actually does during ingest
+
+1. Reads the raw source file
+2. Identifies the source type (article, paper, podcast, journal, repo, dataset)
+3. Extracts key claims, entities, concepts, and quotes using the appropriate template
+4. Writes `wiki/sources/YYYY-MM-DD-slug.md` — structured summary
+5. Creates or updates `wiki/entities/*.md` and `wiki/concepts/*.md` — cross-referenced pages
+6. Updates `index.md` and appends to `log.md`
+7. Clears the pending flag so the watcher knows it's done
+
+The raw file in `raw/` is never modified — it stays as your immutable source of truth.
+
 ## How the tools work together
 
 mindsync integrates three external tools that are automatically detected and installed during `/mindsync init`. Here's what each one does and where it fits in your workflow:
