@@ -313,7 +313,7 @@ If yes:
 Copy the hook script into the vault:
 ```bash
 mkdir -p VAULT_PATH/scripts
-cp "$(dirname "$0")/../scripts/hook-auto-ingest.sh" VAULT_PATH/scripts/hook-auto-ingest.sh
+cp "$HOME/.claude/scripts/mindsync/hook-auto-ingest.sh" VAULT_PATH/scripts/hook-auto-ingest.sh
 chmod +x VAULT_PATH/scripts/hook-auto-ingest.sh
 ```
 
