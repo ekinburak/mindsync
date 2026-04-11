@@ -144,6 +144,19 @@ If you don't install agent-browser, `summarize` covers most ingest use cases wit
 
 ---
 
+## Graph view export
+
+Generate a `graph.json` from all `[[wiki/links]]` across your wiki:
+
+```bash
+bash scripts/generate-graph.sh ~/Documents/mywiki
+```
+
+Output: `graph.json` in your vault root with nodes (pages) and edges (links between them). Import into:
+- **Obsidian** — place in vault root, visible in graph view automatically
+- **D3.js** — load directly as a force-directed graph
+- **Gephi** — File > Import > JSON Graph File
+
 ## Multiple wikis
 
 Each vault is fully self-contained. Run `/mindsync init` in any folder to create a new wiki for a different domain — a research project, a team knowledge base, a book companion. Each gets its own `CLAUDE.md` tuned to its purpose, its own qmd collection, and its own retrieval configuration.
@@ -218,7 +231,7 @@ The manual drop case is intentionally one word. Curation — deciding what enter
   Karpathy: *"vibe coded a small search engine over the wiki, which I use directly in a web UI."*
   A minimal local web interface (`localhost:3000`) wrapping `qmd` — search results as cards with backlinks, previews, and one-click Obsidian deep links.
 
-- [ ] **Output auto-filing** 🟡
+- [x] **Output auto-filing** 🟡
   When `summarize` or `agent-browser` produces output during a session, automatically route it to `raw/` and queue it for ingest — no copy-paste. Requires Claude Code tool output hooks.
 
 - [x] **Domain-specific ingest templates** 🟡
@@ -232,7 +245,7 @@ The manual drop case is intentionally one word. Curation — deciding what enter
 - [x] **`/mindsync search <query>`** 🟢
   Shell alias wrapping `qmd query`, outputting results as clickable Obsidian links. Quick lookups without opening Claude.
 
-- [ ] **Graph view export** 🟢
+- [x] **Graph view export** 🟢
   Parse all `[[wiki/links]]` across wiki pages, generate `graph.json` for visualization in D3.js, Gephi, or Obsidian graph view.
 
 - [ ] **Scale playbook** 🟢

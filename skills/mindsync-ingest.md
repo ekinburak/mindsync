@@ -25,6 +25,7 @@ Otherwise ask: "What's the source?"
 - C) YouTube or podcast URL — go to Step 3B
 - D) PDF file path — go to Step 3C
 - E) Paste text — go to Step 3D
+- F) Content already fetched this session (summarize or agent-browser output) — go to Step 3E
 
 ## Step 3: Fetch and save
 
@@ -41,6 +42,17 @@ Then read the saved file.
 
 **3D — Paste text:**
 Save the pasted content as `raw/<DATE>-freeform.md`. Then read it.
+
+**3E — Session output (auto-filing):**
+If during this session Claude already ran `summarize` or `agent-browser` and produced content that hasn't been saved yet, save it now:
+```bash
+cat > raw/<DATE>-<SLUG>.md << 'EOF'
+<content>
+EOF
+```
+Then read the saved file. This closes the loop on any content fetched during the session without an explicit save step.
+
+**Auto-file trigger:** Any time Claude runs `summarize <URL>` or `agent-browser` and gets back substantial content (more than 200 words), offer immediately: "Want me to file this to raw/ and ingest it?" — don't wait for the user to think to ask. This is output auto-filing.
 
 ## Step 4: Detect source type and discuss
 
