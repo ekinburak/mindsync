@@ -204,34 +204,47 @@ Files in `raw/` don't move automatically — they are intentionally immutable so
 
 The `raw/` file stays untouched forever as your source of truth.
 
-### How wiki stays fresh after every session
+### How the qmd index stays fresh
 
-When you close a Claude Code session in your vault, `hook-session-end.sh` fires automatically. If any wiki files changed during the session, it runs `qmd embed` in the background — so the next time you search, the index reflects everything that was written. You never need to manually run `qmd embed` unless you've been bulk-dropping files outside of Claude.
+There are three layers keeping the search index current — each fires at a different moment:
+
+| Layer | When it fires | How |
+|-------|--------------|-----|
+| `Stop` hook | Every time you close a Claude Code session | `hook-session-end.sh` runs `qmd embed` in the background if wiki files changed |
+| **launchd WatchPaths** (macOS) | Within 30 seconds of any file change in `wiki/` or `raw/` | OS-level file watcher — fires even when Claude isn't open |
+| cron (Linux fallback) | Nightly at 2am | Standard cron job |
+
+**The launchd layer is the important one.** It means qmd is always current — whether you're in a Claude session, clipping articles via Obsidian, or editing files directly in your vault. You don't need Claude Code open for the index to rebuild.
+
+**Example timeline:**
+```
+3:00pm  You clip an article via Obsidian Clipper → lands in raw/
+3:00:30 launchd detects the change → qmd embed runs silently
+3:01pm  You open Claude Code, type anything
+3:01pm  UserPromptSubmit hook detects unprocessed file → auto-ingests
+3:01pm  Wiki pages written, Stop hook rebuilds qmd again
+```
+
+**Set up during init** — `/mindsync init` runs `bash scripts/schedule-embed.sh <vault-path>` which installs the launchd job. To verify it's running:
+
+```bash
+# Check the launchd job is loaded
+launchctl list | grep mindsync
+
+# Check the embed log
+cat ~/.mindsync-embed.log
+```
+
+To remove: `launchctl unload ~/Library/LaunchAgents/com.mindsync.embed.<vault-name>.plist`
 
 ### Best practices for a living wiki
 
 1. **Open Claude Code in your vault directory** — not a parent folder. This activates `CLAUDE.md` and all hooks.
-2. **Start every session with `/mindsync status`** — see what's changed, what's unprocessed, whether the index is fresh.
-3. **Drop sources often, ingest in batches** — drop 3-5 files, then say "ingest all of them". Claude handles sequentially.
-4. **Run `/mindsync lint` weekly** — it finds gaps, suggests new articles, and offers to fill them via web search.
-5. **Keep `_hot.md` under 500 words** — it's your active context. Prune resolved items. Status warns you when it's too long.
-6. **Trust the compounding** — the wiki gets more useful the more you use it. After 20 sources, queries start connecting dots you hadn't noticed.
-
-### Cron jobs set up by init
-
-`/mindsync init` optionally runs `bash scripts/schedule-embed.sh <vault-path>` which installs:
-
-```
-0 2 * * * qmd embed >> ~/.mindsync-embed.log 2>&1
-```
-
-This is a safety net. In practice the `Stop` hook keeps the index fresh after every session.
-
-To check your cron is running:
-```bash
-crontab -l | grep qmd
-cat ~/.mindsync-embed.log
-```
+2. **Drop sources freely** — via Obsidian Clipper, Finder, terminal, anything. The hooks handle detection and ingestion automatically.
+3. **Start sessions with `/mindsync status`** — see what's unprocessed, last activity, index freshness at a glance.
+4. **Run `/mindsync lint` weekly** — finds gaps, suggests new articles, auto-fills via web search.
+5. **Keep `_hot.md` under 500 words** — your active context. Prune resolved items. Status warns you when it grows too long.
+6. **Trust the compounding** — after 20 sources, queries start connecting dots you hadn't noticed.
 
 ## Roadmap / TODO
 
