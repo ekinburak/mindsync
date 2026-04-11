@@ -364,7 +364,53 @@ Tell the user: "Hook installed. Drop any file into raw/ and I'll ingest it autom
 
 If no: skip this step.
 
-## Step 8: Confirm
+## Step 8: Link current project (if different from vault)
+
+Check: is the current working directory (where Claude Code is running) different from VAULT_PATH?
+
+Run:
+```bash
+pwd
+```
+
+If `pwd` output differs from VAULT_PATH:
+
+Say: "You're running this from [CWD], not from inside the vault. Want me to add a quick wiki reference to this project's CLAUDE.md so Claude knows about your wiki when you're working here? (y/n)"
+
+If yes:
+
+Check if `[CWD]/CLAUDE.md` exists.
+
+If it exists, append the wiki block below to it.
+If it does not exist, create `[CWD]/CLAUDE.md` with only the wiki block below.
+
+Wiki block to append (substitute VAULT_PATH, WIKI_NAME, DOMAIN):
+```markdown
+
+---
+
+## Knowledge Base (mindsync wiki)
+
+Business and personal knowledge lives in the WIKI_NAME wiki. When a task needs context — goals, decisions, patterns, research — follow this retrieval protocol in order:
+
+**Wiki path:** `VAULT_PATH/wiki/`
+
+1. **Hot cache first.** Read `VAULT_PATH/_hot.md` (~500 tokens). Contains active threads, current goals, and key numbers. Resolves most queries without reading further.
+2. **Master index.** Read `VAULT_PATH/index.md` if hot cache isn't enough. Check the Entities, Concepts, Sources, and Analyses sections for relevant pages.
+3. **Deep read.** Open 1–2 relevant wiki pages. Never open more than 5 pages per query.
+4. **Grep fallback.** Search `VAULT_PATH/wiki/**/*.md` by keyword if the page isn't indexed.
+5. **Semantic search.** Run `qmd query "<question>"` for full-text semantic search across the wiki.
+
+**Do NOT read from the wiki** unless the task genuinely needs knowledge context. Execution, code, and generation tasks often do not.
+
+**Wiki skills:** `/mindsync search`, `/mindsync query`, `/mindsync ingest`, `/mindsync lint`
+```
+
+Tell the user: "Done — this project now knows about your wiki."
+
+If `pwd` output equals VAULT_PATH: skip this step silently (vault is the current directory — CLAUDE.md is already there).
+
+## Step 9: Confirm
 
 Print a summary showing what was created and next steps:
 - Vault path
@@ -374,4 +420,8 @@ Print a summary showing what was created and next steps:
 - Watcher status (Level 2 fswatch)
 - Auto-ingest hook status (Level 3 Claude Code hook)
 - MCP status
-- Next steps: open vault, drop source in raw/, run /mindsync ingest (or just drop and wait if hook is enabled)
+- Project link status (if CLAUDE.md pointer was written to a non-vault directory)
+- Next steps:
+  - **From the vault:** Open Claude Code in VAULT_PATH — CLAUDE.md auto-loads, full wiki context ready
+  - **From any project:** Run `/mindsync query` or `/mindsync search` — the pointer in that project's CLAUDE.md tells Claude where to look
+  - **First ingest:** Drop a file into raw/, then run `/mindsync ingest` (or just drop and wait if hook is enabled)
