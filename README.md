@@ -227,9 +227,8 @@ The manual drop case is intentionally one word. Curation — deciding what enter
   Karpathy: *"articles, papers, repos, datasets, images."*
   Add ingest support for GitHub repos (README + key files summary), CSV/JSON datasets (column descriptions + statistics), and image collections (captioned via vision model).
 
-- [ ] **Web UI for wiki search** 🟡
-  Karpathy: *"vibe coded a small search engine over the wiki, which I use directly in a web UI."*
-  A minimal local web interface (`localhost:3000`) wrapping `qmd` — search results as cards with backlinks, previews, and one-click Obsidian deep links.
+- [~] **Web UI for wiki search** — *not needed*
+  Karpathy built this because he had no Obsidian. mindsync uses Obsidian as the vault IDE, which already provides search, graph view, backlinks, and previews. `/mindsync search` covers the semantic qmd layer inside Claude Code. No gap to fill.
 
 - [x] **Output auto-filing** 🟡
   When `summarize` or `agent-browser` produces output during a session, automatically route it to `raw/` and queue it for ingest — no copy-paste. Requires Claude Code tool output hooks.
