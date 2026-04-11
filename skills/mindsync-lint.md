@@ -35,6 +35,8 @@ For each: the linked path and which source mentions it.
 Claims in one page that conflict with claims in another.
 For each: both pages, the conflicting claims, and "needs resolution".
 
+After listing all contradictions, offer to resolve them interactively (see Step 3B).
+
 ### Stale claims
 Facts that newer sources have superseded. Check `updated:` dates vs source dates.
 For each: the page, the claim, and the newer source that supersedes it.
@@ -60,6 +62,47 @@ List it as an article candidate:
 - New questions worth investigating based on gaps in the wiki
 - New external sources to look for (be specific: "a paper on X", "an article about Y")
 - `_hot.md` entries that appear resolved or no longer active
+
+## Step 3B: Contradiction resolution (interactive)
+
+If Step 3 found contradictions, ask once:
+
+> "Found N contradictions. Resolve them now? (y / s to select / n to skip)"
+
+**If n:** Skip to Step 4.
+
+**If y or s:**
+
+For each confirmed contradiction, present it side by side:
+
+```
+CONTRADICTION: [[page-a]] vs [[page-b]]
+
+Page A claims:
+"<exact quote or paraphrase of claim from page-a>"
+Source: [[sources/...]] (dated YYYY-MM-DD)
+
+Page B claims:
+"<exact quote or paraphrase of claim from page-b>"
+Source: [[sources/...]] (dated YYYY-MM-DD)
+
+Which is correct? (a / b / both / neither / skip)
+```
+
+Wait for the user's response, then:
+
+- **a** — Update page-b to match page-a. Add a note: `> Updated: conflicts with [[page-a]] resolved on DATE — [[page-a]] is authoritative.`
+- **b** — Update page-a to match page-b. Add the same note in reverse.
+- **both** — Both claims are true in different contexts. Add a nuance note to both pages explaining when each applies.
+- **neither** — Both are wrong. Ask: "What's the correct claim?" Then update both pages with the correction.
+- **skip** — Leave as-is, keep "needs resolution" flag.
+
+After updating, remove the "needs resolution" flag from both pages and update their `updated:` dates.
+
+Log each resolved contradiction:
+```
+Resolved: [[page-a]] vs [[page-b]] — user chose: a/b/both/neither
+```
 
 ## Step 4: Web enrichment (missing data imputation)
 

@@ -223,7 +223,7 @@ The manual drop case is intentionally one word. Curation — deciding what enter
   Karpathy: *"find interesting connections for new article candidates."*
   Lint proactively suggests new concept/entity pages that don't exist yet — based on how often a term appears across sources without its own page. "You mention X in 5 sources but have no concept page for it."
 
-- [ ] **Repo and dataset ingestion** 🟡
+- [x] **Repo and dataset ingestion** 🟡
   Karpathy: *"articles, papers, repos, datasets, images."*
   Add ingest support for GitHub repos (README + key files summary), CSV/JSON datasets (column descriptions + statistics), and image collections (captioned via vision model).
 
@@ -248,10 +248,10 @@ The manual drop case is intentionally one word. Curation — deciding what enter
 - [x] **Graph view export** 🟢
   Parse all `[[wiki/links]]` across wiki pages, generate `graph.json` for visualization in D3.js, Gephi, or Obsidian graph view.
 
-- [ ] **Scale playbook** 🟢
-  Karpathy's wiki: ~100 articles, ~400K words. Document the transition plan: when to introduce domain sub-indexes (`_index-health.md`), when to move to chunk-level retrieval, when fine-tuning is worth it.
+- [x] **Scale playbook** 🟢
+  Karpathy's wiki: ~100 articles, ~400K words. Document the transition plan: when to introduce domain sub-indexes (`_index-health.md`), when to move to chunk-level retrieval, when fine-tuning is worth it. See [`docs/scale-playbook.md`](docs/scale-playbook.md).
 
-- [ ] **Contradiction resolution workflow** 🟡
+- [x] **Contradiction resolution workflow** 🟡
   When lint flags a contradiction: show both conflicting claims side by side, ask which is correct, update both pages atomically, log the resolution.
 
 - [ ] **Synthetic data generation + fine-tuning** 🔵
