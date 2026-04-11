@@ -180,19 +180,19 @@ This is the most important thing to understand about mindsync. **The wiki grows 
 
 | Trigger | What fires | Result |
 |---------|-----------|--------|
-| Claude writes a file to `raw/` (e.g. after fetching a URL) | `PostToolUse` hook | Ingest runs immediately |
+| You drop a file in `raw/` via Finder, Obsidian Clipper, or terminal | `UserPromptSubmit` hook | Next message you send → ingest runs automatically |
+| Claude writes a file to `raw/` (e.g. after fetching a URL) | `PostToolUse` hook | Ingest runs immediately, no message needed |
 | Any Claude Code session ends in the vault | `Stop` hook | qmd index rebuilt silently in background |
 | Every night at 2am | cron job (`schedule-embed.sh`) | qmd index rebuilt as a safety net |
 
-### What needs one word from you
+### What needs a command from you
 
-| You do | You say | What happens |
-|--------|---------|-------------|
-| Drop a file in `raw/` via Finder | "ingest" | Full ingest flow runs |
-| Want an answer from your wiki | `/mindsync query` | Retrieval + synthesis + optional filing |
-| Want to find something | `/mindsync search sleep habits` | Ranked Obsidian links returned |
-| Want a health check | `/mindsync lint` | Gaps found, web enrichment offered |
-| Want a dashboard | `/mindsync status` | Counts, last activity, index freshness |
+| You want | You say | What happens |
+|----------|---------|-------------|
+| An answer from your wiki | `/mindsync query` | Retrieval + synthesis + optional filing |
+| To find something fast | `/mindsync search sleep habits` | Ranked Obsidian links returned |
+| A health check | `/mindsync lint` | Gaps found, web enrichment offered |
+| A dashboard | `/mindsync status` | Counts, last activity, index freshness |
 
 ### How raw/ → wiki/ works
 

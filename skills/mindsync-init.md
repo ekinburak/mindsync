@@ -315,14 +315,26 @@ Copy the hook scripts into the vault:
 mkdir -p VAULT_PATH/scripts
 cp "$HOME/.claude/scripts/mindsync/hook-auto-ingest.sh" VAULT_PATH/scripts/hook-auto-ingest.sh
 cp "$HOME/.claude/scripts/mindsync/hook-session-end.sh" VAULT_PATH/scripts/hook-session-end.sh
+cp "$HOME/.claude/scripts/mindsync/hook-prompt-submit.sh" VAULT_PATH/scripts/hook-prompt-submit.sh
 chmod +x VAULT_PATH/scripts/hook-auto-ingest.sh
 chmod +x VAULT_PATH/scripts/hook-session-end.sh
+chmod +x VAULT_PATH/scripts/hook-prompt-submit.sh
 ```
 
 Write VAULT_PATH/.claude/settings.json (create the file, or merge with existing):
 ```json
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hook-prompt-submit.sh"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Write",

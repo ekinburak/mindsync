@@ -137,6 +137,15 @@ Updated: list of touched pages
 Key insight: one sentence
 ```
 
+## Step 6b: Mark as ingested
+
+After updating indexes, run:
+```bash
+touch raw/.last-ingest
+```
+
+This updates the marker file so the auto-detect hook knows this file has been processed.
+
 ## Step 7: Hot cache check
 
 Ask: "Anything from this source worth adding to _hot.md? Here are my suggestions:" followed by any relevant suggestions.
