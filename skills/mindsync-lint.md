@@ -61,7 +61,59 @@ List it as an article candidate:
 - New external sources to look for (be specific: "a paper on X", "an article about Y")
 - `_hot.md` entries that appear resolved or no longer active
 
-## Step 4: Log
+## Step 4: Web enrichment (missing data imputation)
+
+Karpathy: *"impute missing data with web searchers."*
+
+Collect all enrichable items from the report — items where a web search would actually help:
+- Article candidates (concepts mentioned 3+ times, no page)
+- Thin pages (existing pages under 100 words)
+- Stale claims (facts flagged as outdated)
+
+If there are 0 enrichable items, skip to Step 5.
+
+If there are enrichable items, present the list and ask once:
+
+> "Found N items I can enrich with web data: [list]. Auto-fill them? (y / s to select / n to skip)"
+
+**If n:** Skip to Step 5.
+
+**If y or s (user selects a subset):**
+
+For each confirmed item:
+
+1. Check if agent-browser is available:
+```bash
+which agent-browser || echo "NOT FOUND"
+```
+
+2. **If agent-browser is available:** Search for the topic and fetch the top result:
+```bash
+agent-browser search "<concept or topic name> overview"
+```
+Take the most relevant URL from results, then:
+```bash
+summarize <URL> > raw/$(date +%Y-%m-%d)-<slug>-supplement.md
+```
+
+3. **If agent-browser is NOT available but summarize is:** Ask the user for a URL:
+> "agent-browser isn't installed — paste a URL for '<topic>' and I'll fetch it, or press Enter to skip."
+If URL provided: run `summarize <URL> > raw/$(date +%Y-%m-%d)-<slug>-supplement.md`
+
+4. **If neither is available:** List specific search terms the user can look up:
+> "Neither agent-browser nor summarize is available. To fill these gaps manually, search for:
+> - '<topic 1>': suggested query
+> - '<topic 2>': suggested query"
+
+After saving each file to `raw/`, Claude Code's PostToolUse hook will automatically trigger `/mindsync ingest` for each one. Wait for each ingest to complete before fetching the next.
+
+After all enrichment is done, report:
+```
+Enriched: N pages
+Skipped: N (user skipped or no tool available)
+```
+
+## Step 5: Log
 
 Append to `log.md`:
 ```
@@ -70,5 +122,6 @@ Orphans: N found
 Missing pages: N found
 Contradictions: N found
 Article candidates: N suggested
+Enriched via web: N pages
 Suggestions: N
 ```
