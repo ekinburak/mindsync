@@ -22,7 +22,7 @@
 ## Stage 2: 50–150 pages
 
 **Symptoms:**
-- `index.md` is getting long — Claude reads it but context is crowded
+- `index.md` is getting long and crowds the agent context
 - Queries often need 4–5 page reads to get a full answer
 - Lint takes noticeably longer
 
@@ -39,7 +39,7 @@ _index-ideas.md      ← concepts, frameworks, mental models
 index.md             ← master index, links to sub-indexes
 ```
 
-Update `CLAUDE.md` retrieval protocol:
+Update `AGENTS.md` and compatibility retrieval protocol:
 ```
 2. Master index. Read index.md. If the question falls in a specific domain,
    read the relevant _index-<domain>.md instead of the full index.
@@ -69,7 +69,7 @@ qmd embed
 
 ### Move to chunk-level retrieval
 
-Instead of reading full pages, index individual sections. Update `CLAUDE.md`:
+Instead of reading full pages, index individual sections. Update `AGENTS.md`:
 
 ```
 3. Deep read. Open 1–2 pages. For long pages (> 500 words), read only
@@ -109,13 +109,14 @@ Run `/mindsync query` at the end of each week: "Summarize what changed in the wi
 Export wiki as Q&A pairs and fine-tune a local model to internalize the knowledge base. The fine-tuned model "knows" your wiki without reading it at query time.
 
 ```bash
-# Future: /mindsync finetune
-# Generates JSONL fine-tuning dataset from wiki Q&A pairs
+python3 scripts/mindsync.py export-training --vault . --output wiki/analyses/training-export.jsonl
+# Generates JSONL Q&A examples from compiled wiki pages.
+# Training remains a separate explicit step.
 ```
 
 ### Dedicated retrieval layer
 
-Move qmd to MCP server mode so Claude calls it as a native tool rather than a shell command. Configure in `~/.claude/settings.json`:
+Move qmd to MCP server mode so supported agents call it as a native tool rather than a shell command. Configure the agent MCP settings, for example Claude Code's `~/.claude/settings.json`:
 
 ```json
 {
@@ -128,7 +129,7 @@ Move qmd to MCP server mode so Claude calls it as a native tool rather than a sh
 }
 ```
 
-This lets Claude run multiple qmd queries per session without shell overhead, and stream results incrementally.
+This lets the agent run multiple qmd queries per session without shell overhead and stream results incrementally.
 
 ### Archive old sources
 

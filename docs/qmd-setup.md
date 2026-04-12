@@ -4,6 +4,15 @@ qmd is a local semantic search engine for markdown files. The LLM uses it to sea
 
 ## Install
 
+Project-local install:
+
+```bash
+python3 scripts/mindsync.py ensure-tools --vault . --tool qmd
+QMD=$(python3 scripts/mindsync.py tool-path --vault . qmd)
+```
+
+Global install:
+
 ```bash
 npm install -g @tobilu/qmd
 ```
@@ -11,9 +20,9 @@ npm install -g @tobilu/qmd
 ## Add your wiki as a collection
 
 ```bash
-qmd collection add ~/path/to/wiki --name mywiki
-qmd context add qmd://mywiki "Personal second brain"
-qmd embed
+"$QMD" collection add ~/path/to/wiki --name mywiki
+"$QMD" context add qmd://mywiki "Personal second brain"
+"$QMD" embed
 ```
 
 Run `qmd embed` again after ingesting many new sources (rebuilds the vector index).
@@ -21,14 +30,14 @@ Run `qmd embed` again after ingesting many new sources (rebuilds the vector inde
 ## CLI usage
 
 ```bash
-qmd query "sleep habits"        # hybrid search (recommended)
-qmd search "atomic habits"      # keyword only (fast)
-qmd vsearch "decision making"   # vector only (semantic)
+"$QMD" query "sleep habits"        # hybrid search (recommended)
+"$QMD" search "atomic habits"      # keyword only (fast)
+"$QMD" vsearch "decision making"   # vector only (semantic)
 ```
 
 ## MCP server (recommended)
 
-Add to Claude Code `~/.claude/settings.json`:
+Add to your agent MCP config. For Claude Code, use `~/.claude/settings.json`:
 
 ```json
 {
@@ -41,7 +50,7 @@ Add to Claude Code `~/.claude/settings.json`:
 }
 ```
 
-With MCP configured, Claude calls qmd natively without shell commands.
+With MCP configured, supported agents call qmd natively without shell commands.
 
 ## Re-embed after bulk ingestion
 

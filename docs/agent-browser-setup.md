@@ -1,6 +1,6 @@
 # agent-browser Setup (Optional)
 
-agent-browser lets Claude browse the web autonomously — fetch live articles, extract content, take screenshots — without you copy-pasting anything.
+agent-browser lets an agent browse the web autonomously — fetch live articles, extract content, take screenshots — without you copy-pasting anything.
 
 ## Install
 
@@ -11,7 +11,7 @@ agent-browser install   # downloads Chrome for Testing
 
 ## MCP server
 
-Add to Claude Code `~/.claude/settings.json`:
+Add to your agent MCP config. For Claude Code, use `~/.claude/settings.json`:
 
 ```json
 {
@@ -26,7 +26,7 @@ Add to Claude Code `~/.claude/settings.json`:
 
 ## How it works with the wiki
 
-With agent-browser configured, Claude can:
+With agent-browser configured, supported agents can:
 - Browse a URL you mention and extract the content for ingestion
 - Search the web for sources related to a query
 - Screenshot pages for visual reference

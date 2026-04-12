@@ -2,6 +2,11 @@
 name: mindsync-search
 description: Search the wiki semantically using qmd and return results as clickable Obsidian links
 trigger: /mindsync search
+metadata:
+  openclaw:
+    requires:
+      bins: ["python3", "node"]
+      npm: ["@tobilu/qmd"]
 ---
 
 # /mindsync search
@@ -17,14 +22,14 @@ Otherwise ask: "What are you searching for?"
 ## Step 2: Check qmd
 
 ```bash
-which qmd || echo "NOT FOUND"
+python3 scripts/mindsync.py tool-path --vault . qmd || echo "NOT FOUND"
 ```
 
 If NOT FOUND:
-- Say: "qmd is not installed. Run: npm install -g @tobilu/qmd"
+- Say: "qmd is not installed. Run: python3 scripts/mindsync.py ensure-tools --vault . --tool qmd"
 - Fall back to grep search:
 ```bash
-grep -rl "<query>" wiki/ --include="*.md" | head -10
+rg -l "<query>" wiki/ -g "*.md" | head -10
 ```
 Format grep results as Obsidian links and stop here.
 
@@ -33,14 +38,15 @@ Format grep results as Obsidian links and stop here.
 Run all three search modes in parallel for the best results:
 
 ```bash
-qmd query "<query>"
+QMD=$(python3 scripts/mindsync.py tool-path --vault . qmd)
+"$QMD" query "<query>"
 ```
 
 This runs hybrid BM25 + vector search. It is the recommended default.
 
 For keyword-heavy queries also run:
 ```bash
-qmd search "<query>"
+"$QMD" search "<query>"
 ```
 
 ## Step 4: Format and return results

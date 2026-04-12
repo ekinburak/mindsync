@@ -34,12 +34,40 @@ When a task needs knowledge context, follow this retrieval protocol in order:
 
 | Path | Owner | Rule |
 |------|-------|------|
-| `raw/` | Human | Read-only for you. Never create, edit, or delete files here. |
+| `raw/` | Human + LLM append-only | You may create new source records. Never edit or delete existing raw files. |
 | `wiki/` | LLM | You own every file here. Create, update, cross-reference freely. |
 | `_hot.md` | Human | You may suggest updates, never write directly. |
 | `index.md` | LLM | Update on every ingest or filed analysis. |
 | `log.md` | LLM | Append only. Never edit past entries. |
 | `CLAUDE.md` | Human | Only edit if explicitly asked. |
+
+---
+
+## Deterministic Helper
+
+Use `python3 scripts/mindsync.py` for mechanical work:
+
+- `ensure-tools` and `tool-path` for required project-local qmd/summarize dependencies and optional agent-browser
+- `queue-scan` and `pending` for new raw sources and image assets
+- `mark-ingested` for source hashing and duplicate prevention
+- `lint` for frontmatter, broken links, orphans, duplicate sources, index drift, and qmd freshness
+- `queue-enrichment` and `fetch-enrichment` for missing-data enrichment queues
+- `chart` for matplotlib PNGs saved under `wiki/analyses/assets/`
+- `export-training` for JSONL Q&A dataset exports
+- `checkpoint` before automated wiki writes
+- `mark-embed` after qmd embed completes
+
+Before zero-touch wiki writes, run:
+
+```bash
+python3 scripts/mindsync.py checkpoint --vault .
+```
+
+Before qmd/summarize workflows, bootstrap required local tools if missing:
+
+```bash
+python3 scripts/mindsync.py ensure-tools --vault . --tool qmd --tool summarize
+```
 
 ---
 
@@ -78,14 +106,18 @@ sources: []
 ### INGEST
 Run `/mindsync ingest` or triggered automatically by file watcher.
 
-1. Read source
-2. Discuss key takeaways with {{NAME}} — ask what to emphasize/skip
-3. Wait for input before writing
+1. Run `python3 scripts/mindsync.py queue-scan --vault .`
+2. Read queued sources with `python3 scripts/mindsync.py pending --vault .`
+3. Read each source or image asset
 4. Write `wiki/sources/YYYY-MM-DD-slug.md`
 5. Update relevant `wiki/entities/` and `wiki/concepts/` pages
 6. Update `index.md`
 7. Append to `log.md`: `## [YYYY-MM-DD] ingest | Source Title`
-8. Suggest `_hot.md` updates if relevant
+8. Mark source hash with `python3 scripts/mindsync.py mark-ingested --vault . --path <raw-path> --page <wiki-page>`
+9. Resolve qmd with `python3 scripts/mindsync.py tool-path --vault . qmd`, run embed if available, then `python3 scripts/mindsync.py mark-embed --vault .`
+10. Suggest `_hot.md` updates if relevant
+
+Image assets should be described with captions, visible concepts, and local asset links.
 
 ### QUERY
 1. Read `_hot.md` → `index.md` → relevant pages

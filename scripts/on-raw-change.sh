@@ -1,7 +1,7 @@
 #!/bin/bash
-# on-raw-change.sh — Runs when launchd detects changes in raw/
+# on-raw-change.sh - Runs when launchd detects changes in raw/
 # Does two things:
-#   1. Writes raw/.pending-ingest flag so Claude knows files are waiting
+#   1. Updates .mindsync/state/pending-ingest.json
 #   2. Runs qmd embed so new raw/ files are immediately searchable
 #
 # Called by launchd WatchPaths job — do not run manually.
@@ -12,15 +12,26 @@ if [ -z "$WIKI_PATH" ] || [ ! -d "$WIKI_PATH/raw" ]; then
   exit 0
 fi
 
-# Write the pending flag — UserPromptSubmit hook checks this
-# Only list actual files (not hidden, not assets/)
-PENDING=$(find "$WIKI_PATH/raw" -maxdepth 1 -type f -not -name ".*" -newer "$WIKI_PATH/raw/.last-ingest" 2>/dev/null | xargs -I{} basename {} | tr '\n' ' ')
+SCRIPT="$WIKI_PATH/scripts/mindsync.py"
+if [ ! -f "$SCRIPT" ]; then
+  SCRIPT="$HOME/.claude/scripts/mindsync/mindsync.py"
+fi
 
-if [ -n "$PENDING" ]; then
-  echo "$PENDING" > "$WIKI_PATH/raw/.pending-ingest"
+if [ -f "$SCRIPT" ]; then
+  python3 "$SCRIPT" queue-scan --vault "$WIKI_PATH" >> "$HOME/.mindsync-embed.log" 2>&1 || true
 fi
 
 # Also rebuild qmd index so new raw files are searchable immediately
-if which qmd &>/dev/null; then
-  qmd embed >> "$HOME/.mindsync-embed.log" 2>&1
+QMD_PATH=""
+if [ -x "$WIKI_PATH/.mindsync/tools/node_modules/.bin/qmd" ]; then
+  QMD_PATH="$WIKI_PATH/.mindsync/tools/node_modules/.bin/qmd"
+elif which qmd &>/dev/null; then
+  QMD_PATH="$(which qmd)"
+fi
+
+if [ -n "$QMD_PATH" ]; then
+  "$QMD_PATH" embed >> "$HOME/.mindsync-embed.log" 2>&1
+  if [ -f "$SCRIPT" ]; then
+    python3 "$SCRIPT" mark-embed --vault "$WIKI_PATH" >> "$HOME/.mindsync-embed.log" 2>&1 || true
+  fi
 fi

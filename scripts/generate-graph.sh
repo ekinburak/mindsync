@@ -74,6 +74,8 @@ for root, dirs, files in os.walk(wiki_dir):
         for link in links:
             # Normalize: strip leading wiki/ if present, strip .md
             target = link.strip().replace('.md', '')
+            if target.startswith('raw/') or target.startswith('./raw/'):
+                continue
             if not target.startswith('wiki/'):
                 target = 'wiki/' + target
             if target != node_id:

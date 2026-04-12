@@ -1,0 +1,20 @@
+{
+  "name": "mindsync-local",
+  "interface": {
+    "displayName": "mindsync Local"
+  },
+  "plugins": [
+    {
+      "name": "mindsync",
+      "source": {
+        "source": "local",
+        "path": "./plugins/mindsync"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

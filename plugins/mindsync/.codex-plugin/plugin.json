@@ -1,0 +1,31 @@
+{
+  "name": "mindsync",
+  "version": "0.2.0",
+  "description": "Build and maintain LLM-compiled markdown knowledge bases from raw sources.",
+  "author": {
+    "name": "mindsync",
+    "email": "noreply@example.com",
+    "url": "https://github.com/ekinburak/mindsync"
+  },
+  "homepage": "https://github.com/ekinburak/mindsync",
+  "repository": "https://github.com/ekinburak/mindsync",
+  "license": "MIT",
+  "keywords": ["knowledge-base", "obsidian", "wiki", "llm", "codex"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "mindsync",
+    "shortDescription": "Compile raw sources into a linked markdown wiki.",
+    "longDescription": "mindsync helps agents ingest raw sources, maintain a linked wiki, query it, lint it, generate charts and slides, and export training data.",
+    "developerName": "mindsync",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://github.com/ekinburak/mindsync",
+    "defaultPrompt": [
+      "Initialize a mindsync vault here.",
+      "Ingest pending raw sources.",
+      "Query my mindsync wiki."
+    ],
+    "brandColor": "#2563EB"
+  }
+}

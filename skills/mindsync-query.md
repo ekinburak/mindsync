@@ -1,105 +1,81 @@
 ---
 name: mindsync-query
-description: Research a question against the wiki, synthesize an answer, and optionally file it back as an analysis or Marp slide deck
+description: Query the wiki and optionally file outputs as markdown, Marp slides, charts, or markdown plus chart assets
 trigger: /mindsync query
+metadata:
+  openclaw:
+    requires:
+      bins: ["python3", "node"]
+      npm: ["@tobilu/qmd"]
 ---
 
 # /mindsync query
 
-You are researching a question against the wiki. Follow these steps exactly.
+Research a question against the compiled wiki. Output modes are:
 
-## Step 1: Session context
+- `plain`
+- `markdown`
+- `marp`
+- `chart`
+- `markdown+chart`
 
-Read in this exact order before doing anything else:
-1. `_hot.md` — active context. If this answers the question, stop here.
-2. `index.md` — find relevant page paths. Note which sections apply.
-3. Read 1–2 of the most relevant pages. **Never read more than 5 pages per query.**
+## 1. Retrieve Context
 
-If the question requires information not covered by any page, run:
-```bash
-qmd query "<question>"
-```
-Use the results to supplement your answer. Do not read more pages than the limit.
+Read in order:
 
-## Step 2: Synthesize answer
+1. `_hot.md`
+2. `index.md`
+3. One or two relevant wiki pages, never more than five for a normal query
+4. `QMD=$(python3 scripts/mindsync.py tool-path --vault . qmd) && "$QMD" query "<question>"` if index navigation is insufficient
 
-Write a clear answer with:
-- Citations using Obsidian `[[wiki/path/slug]]` link syntax for every claim
-- Bullet structure preferred over prose
-- If a claim is uncertain, flag it: "(unverified — check [[wiki/sources/...]])"
+Use `[[wiki/path/slug]]` citations for wiki-backed claims. Flag uncertain claims.
 
-## Step 3: Choose output format
+## 2. Choose Output
 
-Ask: "How do you want this output?"
-- **A) Plain answer** — text in this conversation (default)
-- **B) Markdown file** — filed as `wiki/analyses/YYYY-MM-DD-slug.md`
-- **C) Marp slide deck** — filed as `wiki/analyses/YYYY-MM-DD-slug.md` with Marp format
-- **D) Both B and C** — markdown summary + slide deck
+If no output mode is specified, ask. Default to `plain`.
 
-For option C or D, format the file as a Marp slide deck:
+For `plain`, answer in the conversation.
 
-```
+For `markdown`, write `wiki/analyses/YYYY-MM-DD-slug.md` with:
+
+```yaml
 ---
-marp: true
-theme: default
-paginate: true
----
-
-# Title
-
----
-
-## Slide 1 Title
-
-- Key point
-- Key point
-
----
-
-## Slide 2 Title
-
-- Key point
-
----
-
-## Sources
-
-- [[wiki/sources/source-one]]
-- [[wiki/sources/source-two]]
-```
-
-Keep each slide to 3–5 bullet points. One idea per slide.
-
-## Step 4: File the output (if B, C, or D chosen)
-
-Write the file to `wiki/analyses/YYYY-MM-DD-<slug>.md`.
-
-Use this frontmatter:
-
-```
----
-title: <question as title>
+title:
 type: analysis
 tags: []
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
-sources: [list of wiki pages consulted]
-format: markdown | marp
+sources: []
+format: markdown
 ---
 ```
 
-Update `index.md` — add entry under Analyses:
-```
-- [[analyses/YYYY-MM-DD-slug]] — one-line description
+For `marp`, use Marp frontmatter and keep slides to one idea each.
+
+For `chart` or `markdown+chart`:
+
+1. Create a small CSV or JSON data file under `.mindsync/state/` if the data is derived during the query.
+2. Run:
+
+```bash
+python3 scripts/mindsync.py chart --vault . --data ".mindsync/state/chart-data.csv" --title "Title" --kind bar
 ```
 
-Append to `log.md`:
-```
-## [YYYY-MM-DD] query | "<question>"
+3. Save the returned `![[wiki/analyses/assets/...png]]` link in the analysis markdown.
+
+## 3. File Valuable Outputs
+
+When a query produces durable synthesis, file it under `wiki/analyses/`, update
+`index.md`, and append:
+
+```markdown
+## [YYYY-MM-DD] query | "Question"
 Pages consulted: N
-Filed as: wiki/analyses/YYYY-MM-DD-slug.md (format: markdown|marp)
+Filed as: wiki/analyses/YYYY-MM-DD-slug.md
+Output: plain | markdown | marp | chart | markdown+chart
 ```
 
-## Step 5: Suggest next questions
+## 4. Follow-Ups
 
-After answering, say: "Related questions worth exploring:" and list 2–3 follow-up questions the wiki could answer. These help grow the wiki through natural exploration.
+End with two or three related questions worth exploring when they would help the
+wiki compound.

@@ -1,0 +1,131 @@
+# {{WIKI_NAME}}
+
+You are {{NAME}}'s {{DOMAIN}} assistant. Your top priority is {{PRIORITY}}.
+
+This vault is an LLM-maintained knowledge base. The human curates source
+material and asks questions. The agent compiles, links, validates, and extends
+the wiki.
+
+## When To Read The Wiki
+
+Only read the wiki when the task needs knowledge context. Coding, execution,
+or unrelated generation tasks often do not need it.
+
+When context is needed, read in this order:
+
+1. `_hot.md` for active context.
+2. `index.md` for the catalog.
+3. One or two relevant wiki pages. Do not read more than five pages for a normal query.
+4. Keyword search over `wiki/**/*.md` if the page is not indexed.
+5. `qmd query "<question>"` for semantic search when local indexes are insufficient.
+
+## Vault Layout
+
+- `raw/`: append-only source archive. Agents may create new source records, but must never edit or delete existing raw files.
+- `raw/assets/`: append-only images and attachments.
+- `wiki/`: agent-maintained compiled markdown wiki.
+- `wiki/sources/`: one structured summary per source.
+- `wiki/entities/`: people, organizations, projects, places, habits, and goals.
+- `wiki/concepts/`: ideas, frameworks, themes, and mental models.
+- `wiki/analyses/`: filed answers, syntheses, slide decks, charts, digests, and exports.
+- `.mindsync/`: deterministic state, queues, hashes, checkpoints, and config.
+- `index.md`: agent-maintained catalog.
+- `_hot.md`: human-maintained active context. Agents may suggest edits but should not write directly unless explicitly asked.
+- `log.md`: append-only history.
+
+## Deterministic Helper
+
+Prefer `python3 scripts/mindsync.py` for mechanical work:
+
+- `ensure-tools`: install project-local npm CLIs under `.mindsync/tools/`.
+- `tool-path`: resolve local or global tool binaries.
+- `queue-scan`: detect new raw sources and image assets.
+- `pending`: show queued ingest items.
+- `mark-ingested`: record source hashes after wiki pages are written.
+- `lint`: deterministic checks for frontmatter, broken links, orphans, duplicates, index drift, and qmd freshness.
+- `queue-enrichment`: add missing-data tasks.
+- `fetch-enrichment`: fetch queued URLs into `raw/` with `summarize`.
+- `chart`: render matplotlib PNG assets under `wiki/analyses/assets/`.
+- `export-training`: export JSONL Q&A examples from the wiki.
+- `checkpoint`: write a git diff checkpoint under `.mindsync/state/checkpoints/`.
+- `mark-embed`: record the qmd embed timestamp.
+
+Before automated wiki writes, run `python3 scripts/mindsync.py checkpoint --vault .`.
+
+Before qmd/summarize workflows, bootstrap required local tools if missing:
+
+```bash
+python3 scripts/mindsync.py ensure-tools --vault . --tool qmd --tool summarize
+```
+
+## Page Conventions
+
+Every file in `wiki/` uses this frontmatter:
+
+```yaml
+---
+title:
+type: entity | concept | source | analysis
+tags: []
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+sources: []
+---
+```
+
+Use Obsidian links: `[[wiki/path/slug]]`.
+
+## Workflows
+
+### Ingest
+
+1. Run `python3 scripts/mindsync.py queue-scan --vault .`.
+2. Read pending items with `python3 scripts/mindsync.py pending --vault .`.
+3. For each source, compile a source page and update related entity/concept pages.
+4. Update `index.md`.
+5. Append to `log.md`.
+6. Run `python3 scripts/mindsync.py mark-ingested --vault . --path <raw-path> --page <wiki-page>`.
+7. Run `QMD=$(python3 scripts/mindsync.py tool-path --vault . qmd) && "$QMD" embed` when available, then `python3 scripts/mindsync.py mark-embed --vault .`.
+
+Image assets should be described in the related source page with captions,
+visible concepts, and links to the local asset path.
+
+### Query
+
+Answer from `_hot.md`, `index.md`, relevant pages, and qmd fallback. Cite claims
+with `[[wiki/path/slug]]`. Valuable syntheses should be filed in
+`wiki/analyses/` and logged.
+
+### Chart Output
+
+For chart answers, create a small CSV or JSON data file if needed, then run:
+
+```bash
+python3 scripts/mindsync.py chart --vault . --data <data.csv> --title "<title>" --kind bar
+```
+
+Embed the returned `![[wiki/analyses/assets/...png]]` link in the analysis page.
+
+### Lint
+
+Run deterministic lint first:
+
+```bash
+python3 scripts/mindsync.py lint --vault .
+```
+
+Then use LLM judgment for contradictions, synthesis gaps, and article candidates.
+
+### Fine-Tuning Export
+
+Generate an export-only JSONL dataset:
+
+```bash
+python3 scripts/mindsync.py export-training --vault . --output wiki/analyses/training-export.jsonl
+```
+
+Do not train a model unless explicitly asked.
+
+## Domain
+
+{{DOMAIN_DESCRIPTION}}
