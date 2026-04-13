@@ -4,6 +4,20 @@ A portable Claude/Codex/OpenClaw skill suite for building and maintaining person
 
 Instead of RAG (re-discovering knowledge on every query), you build a **persistent, compounding wiki** — structured markdown files that get richer with every source you add. The LLM writes and maintains all of it. You curate sources and ask questions.
 
+**mindsync helps an agent deeply understand a bounded corpus.** It is more
+project/domain-specific than life-wide: one vault is usually one focused area of
+knowledge.
+
+Good fits:
+
+- a research topic
+- a product idea
+- a codebase
+- a book or course
+- a company/project wiki
+- a thesis area
+- a "learn everything about X" workspace
+
 ## Skills
 
 | Command | What it does |
