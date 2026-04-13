@@ -34,6 +34,10 @@ Use this report for:
 - duplicate raw sources
 - stale qmd embed state
 - index drift
+- stale pages older than 90 days
+- `_hot.md` over 500 words
+- stale or broken pending queue entries
+- source/index/log consistency gaps
 
 Do not use LLM time for these mechanical checks.
 
@@ -48,6 +52,8 @@ Read `_hot.md`, `index.md`, and enough relevant pages to assess:
 - resolved `_hot.md` items
 
 For contradictions, show both claims side by side and ask before changing pages.
+Only start semantic contradiction cleanup when deterministic lint output is small
+enough to reason about clearly.
 
 ## 3. Enrichment Queue
 

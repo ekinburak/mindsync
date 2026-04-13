@@ -196,7 +196,7 @@ qmd is a local semantic search engine for markdown files. It runs entirely on yo
 - During `init`: `python3 scripts/mindsync.py ensure-tools --vault . --tool qmd` can install qmd locally under `.mindsync/tools/`
 - Your `wiki/` folder is registered as a qmd collection and embeddings are built
 - During queries: if `_hot.md` and `index.md` don't resolve the question, the agent runs `qmd query "<question>"` to search across all wiki pages semantically
-- After bulk ingestion: run `qmd embed` to rebuild the index
+- After bulk ingestion: run `python3 scripts/mindsync.py embed --vault .` to rebuild the index with mindsync's embed lock
 
 ```bash
 python3 scripts/mindsync.py ensure-tools --vault . --tool qmd
@@ -332,7 +332,7 @@ See [`docs/automation-and-helper.md`](docs/automation-and-helper.md) for the det
 | You drop a file in `raw/` via Finder, Obsidian Clipper, or terminal | watcher + `queue-scan` | Source is added to `.mindsync/state/pending-ingest.json` |
 | Agent writes a new file to `raw/` | runtime hook where supported | Source is queued immediately |
 | Next agent turn in zero-touch mode | pending queue | Agent compiles queued sources into `wiki/`, updates index/log, and records hashes |
-| Any Claude Code session ends in the vault | `Stop` hook | qmd index rebuilt silently in background |
+| Any Claude Code session ends in the vault | `Stop` hook | qmd index rebuilt silently in background if `wiki/` changed |
 | Every night at 2am | cron job (`schedule-embed.sh`) | qmd index rebuilt as a safety net |
 
 ### What needs a command from you
@@ -352,7 +352,7 @@ Files in `raw/` don't move automatically — they are intentionally immutable so
 3. The agent **writes** structured pages into `wiki/sources/`, `wiki/entities/`, `wiki/concepts/`
 4. The agent **updates** `index.md` and appends to `log.md`
 5. `scripts/mindsync.py mark-ingested` records the source hash
-6. The watcher or `Stop` hook rebuilds qmd so the new pages are searchable
+6. The wiki watcher, ingest workflow, or `Stop` hook rebuilds qmd so the new compiled pages are searchable
 
 Existing `raw/` files stay untouched forever as your source of truth.
 
@@ -362,19 +362,19 @@ There are three layers keeping the search index current — each fires at a diff
 
 | Layer | When it fires | How |
 |-------|--------------|-----|
-| `Stop` hook | Every time you close a Claude Code session | `hook-session-end.sh` runs `qmd embed` in the background if wiki files changed |
-| **launchd WatchPaths** (macOS) | Within 30 seconds of any file change in `wiki/` or `raw/` | OS-level file watcher — queues raw sources and refreshes qmd |
+| `Stop` hook | Every time you close a Claude Code session | `hook-session-end.sh` runs `python3 scripts/mindsync.py embed --vault .` in the background if wiki files changed |
+| **launchd WatchPaths** (macOS) | Within 30 seconds of file changes | `raw/` changes queue sources only; `wiki/` changes refresh qmd |
 | cron (Linux fallback) | Nightly at 2am | Standard cron job |
 
-**The launchd layer is the important one.** It means qmd is always current whether you're in an agent session, clipping articles via Obsidian, or editing files directly in your vault. You don't need the agent open for the index to rebuild.
+**The launchd layer is the important one.** It keeps capture and search maintenance separate: clipped raw sources are queued without embedding raw text, and qmd is refreshed only after compiled wiki pages change.
 
 **Example timeline:**
 ```
 3:00pm  You clip an article via Obsidian Clipper → lands in raw/
-3:00:30 launchd detects the change → qmd embed runs silently
+3:00:30 launchd detects the change → source is queued
 3:01pm  You open your agent in the vault, type anything
 3:01pm  UserPromptSubmit hook detects queued source → agent compiles wiki pages
-3:01pm  Source hash recorded, Stop hook rebuilds qmd again
+3:01pm  Source hash recorded, ingest/Stop hook rebuilds qmd
 ```
 
 **Set up during init** — `/mindsync init` runs `bash scripts/schedule-embed.sh <vault-path>` which installs the launchd job. To verify it's running:
@@ -383,11 +383,65 @@ There are three layers keeping the search index current — each fires at a diff
 # Check the launchd job is loaded
 launchctl list | grep mindsync
 
-# Check the embed log
-cat ~/.mindsync-embed.log
+# Check the automation log
+cat .mindsync/state/automation.log
 ```
 
-To remove: `launchctl unload ~/Library/LaunchAgents/com.mindsync.embed.<vault-name>.plist`
+To remove a watcher, use the exact `launchctl unload` command printed by `scripts/schedule-embed.sh`. Labels include a short vault-path hash to avoid collisions.
+
+### Automation roadmap
+
+The target experience is: you manually add source material through Obsidian
+Clipper, Finder, or another capture tool, and mindsync handles everything after
+the file lands in `raw/`.
+
+- [x] **Detect clipped raw sources automatically**
+  Watch `raw/`, ignore temporary downloads, wait for files to settle, hash new
+  sources, and add them to `.mindsync/state/pending-ingest.json`.
+
+- [x] **Keep qmd fresh without embedding raw sources**
+  Watch `wiki/` for compiled-page changes and run
+  `python3 scripts/mindsync.py embed --vault .` under a lock. Raw watcher only
+  queues sources.
+
+- [x] **Repair the pending queue automatically**
+  Mark missing pending files, duplicate pending hashes, and already-ingested
+  hashes so the queue does not silently rot.
+
+- [x] **Expose automation health**
+  `python3 scripts/mindsync.py doctor --vault .` checks structure, tools,
+  watcher labels, pending JSON, qmd freshness, hook scripts, and latest
+  automation errors.
+
+- [ ] **Install and verify automation during init**
+  `/mindsync init` should install watchers, run `doctor`, and show a clear
+  pass/fail summary without requiring manual verification commands.
+
+- [ ] **Auto-ingest pending sources in unattended mode**
+  Add an explicit opt-in background worker that processes pending raw sources
+  into wiki pages, updates `index.md`/`log.md`, marks sources ingested, and
+  embeds qmd. This must preserve raw append-only behavior and write checkpoints.
+
+- [ ] **Automate weekly lint**
+  Schedule deterministic lint, write a short report to
+  `wiki/analyses/YYYY-MM-DD-lint-report.md`, and queue enrichment tasks for thin
+  or stale areas. Semantic page edits still require agent judgment.
+
+- [ ] **Automate stale-page review**
+  Report pages not updated in 90 days and suggest whether to refresh, archive,
+  or leave alone. Do not auto-edit stale pages.
+
+- [ ] **Automate enrichment fetches**
+  For enrichment items with URLs, fetch via `summarize`, save into `raw/`, and
+  let the normal pending ingest flow handle compilation.
+
+- [ ] **Automate recovery**
+  Detect watcher failures, corrupted state, stale qmd, and stuck locks; repair
+  what is safe and leave a visible action item for anything requiring judgment.
+
+- [ ] **Optional notification layer**
+  Surface pending counts, failed automation, and weekly lint summaries through
+  the user's preferred local channel instead of requiring `/mindsync status`.
 
 ### Best practices for a living wiki
 
@@ -422,7 +476,7 @@ To remove: `launchctl unload ~/Library/LaunchAgents/com.mindsync.embed.<vault-na
   Lint creates enrichment tasks in `.mindsync/state/enrichment-queue.json`; URL-backed tasks are fetched with `summarize` into `raw/` and then ingested.
 
 - [x] **Scheduled `qmd embed`** 🟢
-  A watcher, cron job, or runtime stop hook runs `qmd embed` so the vector index stays fresh after bulk ingestion.
+  A watcher, cron job, or runtime stop hook runs `python3 scripts/mindsync.py embed --vault .` so the vector index stays fresh after compiled wiki pages change.
 
 ### 🟡 Medium priority
 

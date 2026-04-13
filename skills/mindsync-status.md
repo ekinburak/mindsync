@@ -21,6 +21,7 @@ Run:
 python3 scripts/mindsync.py queue-scan --vault .
 python3 scripts/mindsync.py pending --vault .
 python3 scripts/mindsync.py lint --vault . --json
+python3 scripts/mindsync.py doctor --vault . --json || true
 ```
 
 Also count:
@@ -47,9 +48,12 @@ Report:
 - page counts by type
 - pending ingest items
 - deterministic lint counts
+- stale page count
 - `_hot.md` word count
 - last five log entries
 - qmd status or stale/unknown state
+- watcher health from `doctor`
+- latest automation error from `.mindsync/state/automation.log`
 - enrichment queue counts from `.mindsync/state/enrichment-queue.json`
 
 Do not append to `log.md`.

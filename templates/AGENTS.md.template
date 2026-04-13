@@ -48,7 +48,9 @@ Prefer `python3 scripts/mindsync.py` for mechanical work:
 - `chart`: render matplotlib PNG assets under `wiki/analyses/assets/`.
 - `export-training`: export JSONL Q&A examples from the wiki.
 - `checkpoint`: write a git diff checkpoint under `.mindsync/state/checkpoints/`.
-- `mark-embed`: record the qmd embed timestamp.
+- `embed`: rebuild qmd under a lock and record freshness state.
+- `doctor`: verify vault structure, tools, watchers, state, and qmd freshness.
+- `mark-embed`: record the qmd embed timestamp when embedding was run externally.
 
 Before automated wiki writes, run `python3 scripts/mindsync.py checkpoint --vault .`.
 
@@ -85,7 +87,7 @@ Use Obsidian links: `[[wiki/path/slug]]`.
 4. Update `index.md`.
 5. Append to `log.md`.
 6. Run `python3 scripts/mindsync.py mark-ingested --vault . --path <raw-path> --page <wiki-page>`.
-7. Run `QMD=$(python3 scripts/mindsync.py tool-path --vault . qmd) && "$QMD" embed` when available, then `python3 scripts/mindsync.py mark-embed --vault .`.
+7. Run `python3 scripts/mindsync.py embed --vault .` when qmd is available.
 
 Image assets should be described in the related source page with captions,
 visible concepts, and links to the local asset path.

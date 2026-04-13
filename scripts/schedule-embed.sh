@@ -5,7 +5,7 @@
 #
 # Installs two launchd jobs (macOS) or one cron job (Linux):
 #   1. Watch wiki/  -> run qmd embed when wiki pages change
-#   2. Watch raw/   -> update pending queue + run qmd embed when sources arrive
+#   2. Watch raw/   -> update pending queue when sources arrive
 #
 # The deterministic queue is read by hook-prompt-submit.sh.
 
@@ -27,8 +27,9 @@ if [ ! -d "$WIKI_PATH/wiki" ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LOG="$HOME/.mindsync-embed.log"
-VAULT_NAME="$(basename "$WIKI_PATH")"
+mkdir -p "$WIKI_PATH/.mindsync/state"
+LOG="$WIKI_PATH/.mindsync/state/automation.log"
+LABEL_SUFFIX=$(python3 -c 'import hashlib,re,sys; p=sys.argv[1]; name=p.rstrip("/").split("/")[-1].lower(); name=re.sub(r"[^a-z0-9]+","-",name).strip("-") or "vault"; print(f"{name}.{hashlib.sha256(p.encode()).hexdigest()[:8]}")' "$WIKI_PATH")
 
 if [ -x "$WIKI_PATH/.mindsync/tools/node_modules/.bin/qmd" ]; then
   QMD_PATH="$WIKI_PATH/.mindsync/tools/node_modules/.bin/qmd"
@@ -39,7 +40,7 @@ else
   exit 1
 fi
 
-MARK_EMBED="<array><string>/bin/bash</string><string>-lc</string><string>$QMD_PATH embed &amp;&amp; python3 $SCRIPT_DIR/mindsync.py mark-embed --vault '$WIKI_PATH'</string></array>"
+MARK_EMBED="<array><string>/usr/bin/env</string><string>python3</string><string>$SCRIPT_DIR/mindsync.py</string><string>embed</string><string>--vault</string><string>$WIKI_PATH</string></array>"
 
 # ── macOS: two launchd jobs ───────────────────────────────────────────────────
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -84,20 +85,20 @@ EOF
     echo "  Watches:   $watch_path"
   }
 
-  echo "Installing launchd watchers for $VAULT_NAME..."
+  echo "Installing launchd watchers for $WIKI_PATH..."
   echo ""
 
   # Job 1: wiki/ changes -> qmd embed only
   install_plist \
-    "com.mindsync.wiki.$VAULT_NAME" \
+    "com.mindsync.wiki.$LABEL_SUFFIX" \
     "$WIKI_PATH/wiki" \
     "$MARK_EMBED"
 
   echo ""
 
-  # Job 2: raw/ changes -> queue pending ingest + qmd embed
+  # Job 2: raw/ changes -> queue pending ingest only
   install_plist \
-    "com.mindsync.raw.$VAULT_NAME" \
+    "com.mindsync.raw.$LABEL_SUFFIX" \
     "$WIKI_PATH/raw" \
     "<array><string>$SCRIPT_DIR/on-raw-change.sh</string><string>$WIKI_PATH</string></array>"
 
@@ -106,21 +107,21 @@ EOF
   echo "Log:       $LOG"
   echo ""
   echo "To remove:"
-  echo "  launchctl unload ~/Library/LaunchAgents/com.mindsync.wiki.$VAULT_NAME.plist"
-  echo "  launchctl unload ~/Library/LaunchAgents/com.mindsync.raw.$VAULT_NAME.plist"
+  echo "  launchctl unload ~/Library/LaunchAgents/com.mindsync.wiki.$LABEL_SUFFIX.plist"
+  echo "  launchctl unload ~/Library/LaunchAgents/com.mindsync.raw.$LABEL_SUFFIX.plist"
 
 # ── Linux: cron fallback ──────────────────────────────────────────────────────
 else
-  CRON_JOB="0 2 * * * $QMD_PATH embed >> $LOG 2>&1"
+  CRON_JOB="0 2 * * * /usr/bin/env python3 $SCRIPT_DIR/mindsync.py embed --vault '$WIKI_PATH' >> $LOG 2>&1"
 
-  if crontab -l 2>/dev/null | grep -q "qmd embed"; then
-    echo "qmd embed is already scheduled in crontab."
-    crontab -l | grep "qmd embed"
+  if crontab -l 2>/dev/null | grep -q "mindsync.py embed --vault"; then
+    echo "mindsync embed is already scheduled in crontab."
+    crontab -l | grep "mindsync.py embed --vault"
   else
     (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
-    echo "Scheduled: qmd embed nightly at 2am (Linux — launchd not available)"
+    echo "Scheduled: mindsync embed nightly at 2am (Linux — launchd not available)"
     echo "Log: $LOG"
     echo ""
-    echo "To remove: crontab -e and delete the qmd embed line"
+    echo "To remove: crontab -e and delete the mindsync embed line"
   fi
 fi

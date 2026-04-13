@@ -55,7 +55,9 @@ Use `python3 scripts/mindsync.py` for mechanical work:
 - `chart` for matplotlib PNGs saved under `wiki/analyses/assets/`
 - `export-training` for JSONL Q&A dataset exports
 - `checkpoint` before automated wiki writes
-- `mark-embed` after qmd embed completes
+- `embed` to rebuild qmd under a lock and record freshness state
+- `doctor` to verify vault structure, tools, watchers, state, and qmd freshness
+- `mark-embed` after qmd embed completes outside the helper
 
 Before zero-touch wiki writes, run:
 
@@ -114,7 +116,7 @@ Run `/mindsync ingest` or triggered automatically by file watcher.
 6. Update `index.md`
 7. Append to `log.md`: `## [YYYY-MM-DD] ingest | Source Title`
 8. Mark source hash with `python3 scripts/mindsync.py mark-ingested --vault . --path <raw-path> --page <wiki-page>`
-9. Resolve qmd with `python3 scripts/mindsync.py tool-path --vault . qmd`, run embed if available, then `python3 scripts/mindsync.py mark-embed --vault .`
+9. Run `python3 scripts/mindsync.py embed --vault .` if qmd is available
 10. Suggest `_hot.md` updates if relevant
 
 Image assets should be described with captions, visible concepts, and local asset links.

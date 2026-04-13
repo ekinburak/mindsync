@@ -77,9 +77,7 @@ python3 scripts/mindsync.py mark-ingested --vault . --path "raw/path.md" --page 
 If qmd is available:
 
 ```bash
-QMD=$(python3 scripts/mindsync.py tool-path --vault . qmd)
-"$QMD" embed
-python3 scripts/mindsync.py mark-embed --vault .
+python3 scripts/mindsync.py embed --vault .
 ```
 
 ## 5. Hot Cache
