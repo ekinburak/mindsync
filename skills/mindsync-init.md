@@ -102,8 +102,7 @@ cd "VAULT_PATH"
 QMD=$(python3 scripts/mindsync.py tool-path --vault . qmd)
 "$QMD" collection add "VAULT_PATH/wiki" --name "WIKI_NAME" || true
 "$QMD" context add "qmd://WIKI_NAME" "DOMAIN" || true
-"$QMD" embed
-python3 scripts/mindsync.py mark-embed --vault .
+python3 scripts/mindsync.py embed --vault .
 ```
 
 ## 5. Zero-Touch Hooks

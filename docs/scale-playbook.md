@@ -53,7 +53,7 @@ Keep it under 400 tokens. Anything resolved or older than 2 weeks belongs in a w
 
 After adding 5+ sources at once:
 ```bash
-qmd embed
+python3 scripts/mindsync.py embed --vault .
 ```
 
 ---
@@ -152,5 +152,5 @@ Sources older than 2 years that have been fully synthesized into concept and ent
 
 - **`_hot.md` over 500 words** → trim immediately
 - **Total pages > 50** → consider splitting index.md
-- **qmd index stale > 3 days** → run `qmd embed`
+- **qmd index stale > 3 days** → run `python3 scripts/mindsync.py embed --vault .`
 - **Raw sources unprocessed > 5** → batch ingest session needed

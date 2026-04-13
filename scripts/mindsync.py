@@ -9,6 +9,7 @@ training export, and state files.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import csv
 import datetime as dt
 import hashlib
@@ -18,6 +19,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +31,7 @@ if not TEMPLATE_DIR.exists():
     TEMPLATE_DIR = SCRIPT_DIR / "templates"
 STATE_VERSION = 1
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".tiff", ".bmp", ".heic"}
+RAW_TEMP_SUFFIXES = {".crdownload", ".download", ".tmp", ".part"}
 REQUIRED_FRONTMATTER = {"title", "type", "tags", "created", "updated", "sources"}
 TOOL_SPECS = {
     "qmd": {"package": "@tobilu/qmd", "bin": "qmd"},
@@ -71,7 +74,54 @@ def read_json(path: Path, default: Any) -> Any:
 
 def write_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+
+
+@contextlib.contextmanager
+def file_lock(vault: Path, name: str, timeout: float = 30.0):
+    ensure_state(vault)
+    lock_path = state_paths(vault)["state"] / f"{name}.lock"
+    deadline = time.monotonic() + timeout
+    fd: int | None = None
+    while True:
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, f"{os.getpid()} {now_iso()}\n".encode("utf-8"))
+            break
+        except FileExistsError:
+            try:
+                age = time.time() - lock_path.stat().st_mtime
+                if age > timeout * 2:
+                    lock_path.unlink()
+                    continue
+            except FileNotFoundError:
+                continue
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"Timed out waiting for lock: {lock_path}")
+            time.sleep(0.1)
+    try:
+        yield
+    finally:
+        if fd is not None:
+            os.close(fd)
+        try:
+            lock_path.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def automation_log_path(vault: Path) -> Path:
+    return state_paths(vault)["state"] / "automation.log"
+
+
+def log_automation(vault: Path, level: str, message: str) -> None:
+    path = automation_log_path(vault)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    line = f"{now_iso()} {level.upper()} vault={vault} {message}\n"
+    with path.open("a", encoding="utf-8") as f:
+        f.write(line)
 
 
 def sha256_file(path: Path) -> str:
@@ -284,18 +334,29 @@ def command_init(args: argparse.Namespace) -> int:
     return 0
 
 
-def raw_candidates(vault: Path) -> list[tuple[Path, str]]:
+def is_stable_raw_file(path: Path, min_age_seconds: int) -> bool:
+    if path.name.startswith(".") or path.suffix.lower() in RAW_TEMP_SUFFIXES:
+        return False
+    if min_age_seconds <= 0:
+        return True
+    try:
+        return time.time() - path.stat().st_mtime >= min_age_seconds
+    except FileNotFoundError:
+        return False
+
+
+def raw_candidates(vault: Path, min_age_seconds: int = 0) -> list[tuple[Path, str]]:
     raw = vault / "raw"
     results: list[tuple[Path, str]] = []
     if not raw.exists():
         return results
     for path in sorted(raw.iterdir()):
-        if path.is_file() and not path.name.startswith("."):
+        if path.is_file() and is_stable_raw_file(path, min_age_seconds):
             results.append((path, "source"))
     assets = raw / "assets"
     if assets.exists():
         for path in sorted(assets.rglob("*")):
-            if path.is_file() and not path.name.startswith(".") and path.suffix.lower() in IMAGE_EXTS:
+            if path.is_file() and is_stable_raw_file(path, min_age_seconds) and path.suffix.lower() in IMAGE_EXTS:
                 results.append((path, "image"))
     return results
 
@@ -312,37 +373,68 @@ def save_pending(vault: Path, pending: dict[str, Any]) -> None:
     write_json(state_paths(vault)["pending"], pending)
 
 
+def repair_pending(vault: Path, pending: dict[str, Any], known_hashes: dict[str, Any]) -> dict[str, int]:
+    stats = {"missing": 0, "ingested": 0, "duplicate": 0}
+    seen_pending: set[str] = set()
+    for item in pending.get("items", []):
+        if item.get("status") != "pending":
+            continue
+        digest = item.get("sha256")
+        if digest and digest in known_hashes:
+            item["status"] = "ingested"
+            item["repaired_at"] = now_iso()
+            stats["ingested"] += 1
+            continue
+        if digest and digest in seen_pending:
+            item["status"] = "duplicate"
+            item["repaired_at"] = now_iso()
+            stats["duplicate"] += 1
+            continue
+        if digest:
+            seen_pending.add(digest)
+        path_value = item.get("path")
+        if path_value and not (vault / path_value).exists():
+            item["status"] = "missing"
+            item["repaired_at"] = now_iso()
+            stats["missing"] += 1
+    return stats
+
+
 def command_queue_scan(args: argparse.Namespace) -> int:
     vault = vault_root(args.vault)
     ensure_state(vault)
-    hashes = read_json(state_paths(vault)["hashes"], {"version": STATE_VERSION, "sources": {}})
-    known = hashes.setdefault("sources", {})
-    pending = load_pending(vault)
-    existing_hashes = {item.get("sha256") for item in pending["items"] if item.get("status") == "pending"}
-    added = 0
+    with file_lock(vault, "queue"):
+        hashes = read_json(state_paths(vault)["hashes"], {"version": STATE_VERSION, "sources": {}})
+        known = hashes.setdefault("sources", {})
+        pending = load_pending(vault)
+        repair_stats = repair_pending(vault, pending, known)
+        existing_hashes = {item.get("sha256") for item in pending["items"] if item.get("status") == "pending"}
+        added = 0
 
-    for path, kind in raw_candidates(vault):
-        digest = sha256_file(path)
-        if digest in known or digest in existing_hashes:
-            continue
-        item = {
-            "id": digest[:16],
-            "path": rel_to_vault(path, vault),
-            "kind": kind,
-            "sha256": digest,
-            "status": "pending",
-            "created_at": now_iso(),
-        }
-        pending["items"].append(item)
-        existing_hashes.add(digest)
-        added += 1
+        for path, kind in raw_candidates(vault, args.min_age_seconds):
+            digest = sha256_file(path)
+            if digest in known or digest in existing_hashes:
+                continue
+            item = {
+                "id": digest[:16],
+                "path": rel_to_vault(path, vault),
+                "kind": kind,
+                "sha256": digest,
+                "status": "pending",
+                "created_at": now_iso(),
+            }
+            pending["items"].append(item)
+            existing_hashes.add(digest)
+            added += 1
 
-    save_pending(vault, pending)
+        save_pending(vault, pending)
     pending_count = sum(1 for item in pending["items"] if item.get("status") == "pending")
     if args.json:
-        print(json.dumps({"added": added, "pending": pending_count, "items": pending["items"]}, indent=2))
+        print(json.dumps({"added": added, "pending": pending_count, "repaired": repair_stats, "items": pending["items"]}, indent=2))
     else:
-        print(f"Queued {added} new source(s); {pending_count} pending.")
+        repaired = sum(repair_stats.values())
+        suffix = f"; repaired {repaired}" if repaired else ""
+        print(f"Queued {added} new source(s); {pending_count} pending{suffix}.")
         for item in pending["items"]:
             if item.get("status") == "pending":
                 print(f"- {item['path']} ({item['kind']})")
@@ -370,24 +462,25 @@ def command_mark_ingested(args: argparse.Namespace) -> int:
     if not target.exists():
         print(f"Missing source: {target}", file=sys.stderr)
         return 1
-    digest = sha256_file(target)
-    hashes = read_json(state_paths(vault)["hashes"], {"version": STATE_VERSION, "sources": {}})
-    hashes.setdefault("sources", {})[digest] = {
-        "path": rel_to_vault(target, vault),
-        "ingested_at": now_iso(),
-        "wiki_pages": args.page or [],
-    }
-    write_json(state_paths(vault)["hashes"], hashes)
+    with file_lock(vault, "queue"):
+        digest = sha256_file(target)
+        hashes = read_json(state_paths(vault)["hashes"], {"version": STATE_VERSION, "sources": {}})
+        hashes.setdefault("sources", {})[digest] = {
+            "path": rel_to_vault(target, vault),
+            "ingested_at": now_iso(),
+            "wiki_pages": args.page or [],
+        }
+        write_json(state_paths(vault)["hashes"], hashes)
 
-    pending = load_pending(vault)
-    for item in pending["items"]:
-        if item.get("sha256") == digest or item.get("path") == rel_to_vault(target, vault):
-            item["status"] = "ingested"
-            item["ingested_at"] = now_iso()
-            if args.page:
-                item["wiki_pages"] = args.page
-    save_pending(vault, pending)
-    write_json(state_paths(vault)["last_ingest"], {"at": now_iso(), "path": rel_to_vault(target, vault)})
+        pending = load_pending(vault)
+        for item in pending["items"]:
+            if item.get("sha256") == digest or item.get("path") == rel_to_vault(target, vault):
+                item["status"] = "ingested"
+                item["ingested_at"] = now_iso()
+                if args.page:
+                    item["wiki_pages"] = args.page
+        save_pending(vault, pending)
+        write_json(state_paths(vault)["last_ingest"], {"at": now_iso(), "path": rel_to_vault(target, vault)})
     (vault / "raw" / ".last-ingest").touch()
     print(f"Marked ingested: {rel_to_vault(target, vault)}")
     return 0
@@ -430,6 +523,136 @@ def page_id(path: Path, vault: Path) -> str:
     return rel_to_vault(path, vault).removesuffix(".md")
 
 
+def parse_iso_date(value: str | None) -> dt.date | None:
+    if not value:
+        return None
+    value = value.strip().strip("\"'")
+    try:
+        return dt.date.fromisoformat(value[:10])
+    except ValueError:
+        return None
+
+
+def age_days_from_mtime(path: Path) -> int:
+    modified = dt.datetime.fromtimestamp(path.stat().st_mtime).date()
+    return (dt.date.today() - modified).days
+
+
+def stale_pages(vault: Path, pages: list[Path], stale_days: int) -> list[dict[str, Any]]:
+    stale = []
+    today_date = dt.date.today()
+    for path in pages:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        frontmatter, _ = parse_frontmatter(text)
+        updated = parse_iso_date(frontmatter.get("updated"))
+        if updated:
+            age = (today_date - updated).days
+            source = "frontmatter"
+            updated_value = updated.isoformat()
+        else:
+            age = age_days_from_mtime(path)
+            source = "mtime"
+            updated_value = dt.datetime.fromtimestamp(path.stat().st_mtime).date().isoformat()
+        if age > stale_days:
+            stale.append(
+                {
+                    "path": page_id(path, vault),
+                    "age_days": age,
+                    "updated": updated_value,
+                    "source": source,
+                }
+            )
+    return stale
+
+
+def qmd_report(vault: Path, pages: list[Path]) -> dict[str, Any]:
+    last_embed = read_json(state_paths(vault)["last_embed"], {})
+    newest_wiki = max((path.stat().st_mtime for path in pages), default=0)
+    embed_at = last_embed.get("mtime", 0)
+    stale = bool(newest_wiki and embed_at and newest_wiki > embed_at)
+    unknown = not bool(embed_at)
+    return {
+        "stale": stale,
+        "unknown": unknown,
+        "last_embed_at": last_embed.get("at"),
+        "last_embed_mtime": embed_at or None,
+        "newest_wiki_mtime": newest_wiki or None,
+    }
+
+
+def hot_report(vault: Path) -> dict[str, Any]:
+    path = vault / "_hot.md"
+    if not path.exists():
+        return {"exists": False, "word_count": 0, "too_long": False}
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    words = re.findall(r"\S+", text)
+    return {"exists": True, "word_count": len(words), "too_long": len(words) > 500}
+
+
+def pending_lint(vault: Path) -> dict[str, list[dict[str, Any]]]:
+    pending = read_json(state_paths(vault)["pending"], {"version": STATE_VERSION, "items": []})
+    now = dt.datetime.now(dt.timezone.utc)
+    old = []
+    missing = []
+    for item in pending.get("items", []):
+        if item.get("status") != "pending":
+            continue
+        path_value = item.get("path")
+        if path_value and not (vault / path_value).exists():
+            missing.append({"id": item.get("id"), "path": path_value})
+        created = item.get("created_at")
+        try:
+            created_dt = dt.datetime.fromisoformat(created) if created else None
+        except ValueError:
+            created_dt = None
+        if created_dt:
+            if created_dt.tzinfo is None:
+                created_dt = created_dt.replace(tzinfo=dt.timezone.utc)
+            age = (now - created_dt).days
+            if age > 7:
+                old.append({"id": item.get("id"), "path": path_value, "age_days": age})
+
+    enrichment = read_json(state_paths(vault)["enrichment"], {"version": STATE_VERSION, "items": []})
+    blocked_enrichment = [
+        {"id": item.get("id"), "topic": item.get("topic"), "status": item.get("status"), "error": item.get("error")}
+        for item in enrichment.get("items", [])
+        if item.get("status") in {"blocked", "needs-url"}
+    ]
+    fetched_not_ingested = []
+    hashes = read_json(state_paths(vault)["hashes"], {"version": STATE_VERSION, "sources": {}}).get("sources", {})
+    ingested_paths = {entry.get("path") for entry in hashes.values() if isinstance(entry, dict)}
+    for item in enrichment.get("items", []):
+        raw_path = item.get("raw_path")
+        if item.get("status") == "fetched" and raw_path and raw_path not in ingested_paths:
+            fetched_not_ingested.append({"id": item.get("id"), "topic": item.get("topic"), "raw_path": raw_path})
+
+    return {
+        "old_pending": old,
+        "missing_pending": missing,
+        "blocked_enrichment": blocked_enrichment,
+        "fetched_enrichment_not_ingested": fetched_not_ingested,
+    }
+
+
+def source_consistency(vault: Path, source_ids: list[str], index_text: str, log_text: str) -> dict[str, list[dict[str, Any]]]:
+    source_index_gaps = [{"path": pid} for pid in source_ids if pid not in index_text and f"[[{pid}]]" not in index_text]
+    source_log_gaps = [{"path": pid} for pid in source_ids if pid not in log_text and f"[[{pid}]]" not in log_text]
+    hashes = read_json(state_paths(vault)["hashes"], {"version": STATE_VERSION, "sources": {}}).get("sources", {})
+    missing_pages = []
+    for digest, entry in hashes.items():
+        if not isinstance(entry, dict):
+            continue
+        for page in entry.get("wiki_pages", []) or []:
+            target = page.removesuffix(".md")
+            if not (vault / f"{target}.md").exists():
+                missing_pages.append({"sha256": digest, "raw_path": entry.get("path"), "wiki_page": page})
+    return {
+        "source_index_gaps": source_index_gaps,
+        "source_log_gaps": source_log_gaps,
+        "ingested_missing_pages": missing_pages,
+    }
+
+
 def command_lint(args: argparse.Namespace) -> int:
     vault = vault_root(args.vault)
     pages = wiki_pages(vault)
@@ -461,6 +684,7 @@ def command_lint(args: argparse.Namespace) -> int:
     ]
 
     index_text = (vault / "index.md").read_text(encoding="utf-8", errors="ignore") if (vault / "index.md").exists() else ""
+    log_text = (vault / "log.md").read_text(encoding="utf-8", errors="ignore") if (vault / "log.md").exists() else ""
     index_drift = [
         {"path": pid}
         for pid in sorted(ids)
@@ -476,11 +700,12 @@ def command_lint(args: argparse.Namespace) -> int:
         if len(paths) > 1
     ]
 
-    last_embed = read_json(state_paths(vault)["last_embed"], {})
-    newest_wiki = max((path.stat().st_mtime for path in pages), default=0)
-    embed_at = last_embed.get("mtime", 0)
-    qmd_stale = bool(newest_wiki and embed_at and newest_wiki > embed_at)
-    qmd_unknown = not bool(embed_at)
+    source_ids = [pid for pid in sorted(ids) if "/sources/" in pid]
+    consistency = source_consistency(vault, source_ids, index_text, log_text)
+    pending_report = pending_lint(vault)
+    stale = stale_pages(vault, pages, args.stale_days)
+    hot = hot_report(vault)
+    qmd = qmd_report(vault, pages)
 
     report = {
         "frontmatter_gaps": frontmatter_gaps,
@@ -488,7 +713,13 @@ def command_lint(args: argparse.Namespace) -> int:
         "orphans": orphans,
         "index_drift": index_drift,
         "duplicate_raw_sources": duplicates,
-        "qmd": {"stale": qmd_stale, "unknown": qmd_unknown},
+        "stale_pages": stale,
+        "_hot": hot,
+        "source_index_gaps": consistency["source_index_gaps"],
+        "source_log_gaps": consistency["source_log_gaps"],
+        "ingested_missing_pages": consistency["ingested_missing_pages"],
+        "pending": pending_report,
+        "qmd": qmd,
         "counts": {
             "pages": len(pages),
             "frontmatter_gaps": len(frontmatter_gaps),
@@ -496,13 +727,30 @@ def command_lint(args: argparse.Namespace) -> int:
             "orphans": len(orphans),
             "index_drift": len(index_drift),
             "duplicate_raw_sources": len(duplicates),
+            "stale_pages": len(stale),
+            "source_index_gaps": len(consistency["source_index_gaps"]),
+            "source_log_gaps": len(consistency["source_log_gaps"]),
+            "ingested_missing_pages": len(consistency["ingested_missing_pages"]),
+            "old_pending": len(pending_report["old_pending"]),
+            "missing_pending": len(pending_report["missing_pending"]),
+            "blocked_enrichment": len(pending_report["blocked_enrichment"]),
+            "fetched_enrichment_not_ingested": len(pending_report["fetched_enrichment_not_ingested"]),
         },
     }
     if args.json:
         print(json.dumps(report, indent=2))
     else:
         print("# mindsync deterministic lint")
-        for key in ["frontmatter_gaps", "missing_pages", "orphans", "index_drift", "duplicate_raw_sources"]:
+        for key in [
+            "frontmatter_gaps",
+            "missing_pages",
+            "orphans",
+            "index_drift",
+            "duplicate_raw_sources",
+            "stale_pages",
+            "source_log_gaps",
+            "ingested_missing_pages",
+        ]:
             print(f"\n## {key.replace('_', ' ').title()}")
             items = report[key]
             if not items:
@@ -513,6 +761,8 @@ def command_lint(args: argparse.Namespace) -> int:
         qmd = report["qmd"]
         print("\n## Qmd")
         print(f"stale={qmd['stale']} unknown={qmd['unknown']}")
+        print("\n## _hot")
+        print(f"words={hot['word_count']} too_long={hot['too_long']}")
     return 0
 
 
@@ -568,7 +818,7 @@ def command_fetch_enrichment(args: argparse.Namespace) -> int:
         fetched += 1
     write_json(state_paths(vault)["enrichment"], queue)
     if fetched:
-        command_queue_scan(argparse.Namespace(vault=str(vault), json=False))
+        command_queue_scan(argparse.Namespace(vault=str(vault), json=False, min_age_seconds=0))
     print(f"Fetched {fetched} enrichment source(s).")
     return 0
 
@@ -695,12 +945,125 @@ def command_checkpoint(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_embed(args: argparse.Namespace) -> int:
+    vault = vault_root(args.vault)
+    ensure_state(vault)
+    qmd = resolve_tool(vault, "qmd")
+    if not qmd:
+        message = "qmd not found; run ensure-tools"
+        log_automation(vault, "error", f"embed skipped: {message}")
+        print(message, file=sys.stderr)
+        return 1
+    try:
+        with file_lock(vault, "embed", timeout=args.lock_timeout):
+            log_automation(vault, "info", "qmd embed start")
+            subprocess.run([qmd, "embed"], cwd=vault, check=True)
+            write_json(state_paths(vault)["last_embed"], {"at": now_iso(), "mtime": dt.datetime.now().timestamp()})
+            log_automation(vault, "info", "qmd embed complete")
+    except Exception as exc:
+        log_automation(vault, "error", f"qmd embed failed: {exc}")
+        print(f"qmd embed failed: {exc}", file=sys.stderr)
+        return 1
+    print("Embedded wiki and recorded qmd timestamp.")
+    return 0
+
+
 def command_mark_embed(args: argparse.Namespace) -> int:
     vault = vault_root(args.vault)
     ensure_state(vault)
     write_json(state_paths(vault)["last_embed"], {"at": now_iso(), "mtime": dt.datetime.now().timestamp()})
     print("Recorded qmd embed timestamp.")
     return 0
+
+
+def vault_label_suffix(vault: Path) -> str:
+    digest = hashlib.sha256(str(vault).encode("utf-8")).hexdigest()[:8]
+    return f"{slugify(vault.name)}.{digest}"
+
+
+def launchd_labels(vault: Path) -> dict[str, str]:
+    suffix = vault_label_suffix(vault)
+    return {"wiki": f"com.mindsync.wiki.{suffix}", "raw": f"com.mindsync.raw.{suffix}"}
+
+
+def latest_automation_error(vault: Path) -> str | None:
+    path = automation_log_path(vault)
+    if not path.exists():
+        return None
+    latest = None
+    for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        if " ERROR " in line:
+            latest = line
+    return latest
+
+
+def json_readable(path: Path) -> tuple[bool, str | None]:
+    if not path.exists():
+        return False, "missing"
+    try:
+        json.loads(path.read_text(encoding="utf-8"))
+        return True, None
+    except json.JSONDecodeError as exc:
+        return False, str(exc)
+
+
+def command_doctor(args: argparse.Namespace) -> int:
+    vault = vault_root(args.vault)
+    pages = wiki_pages(vault)
+    required_paths = [
+        "raw",
+        "raw/assets",
+        "wiki",
+        "wiki/sources",
+        "wiki/entities",
+        "wiki/concepts",
+        "wiki/analyses",
+        ".mindsync/state",
+        "index.md",
+        "log.md",
+    ]
+    checks = []
+
+    for rel in required_paths:
+        path = vault / rel
+        checks.append({"name": f"path:{rel}", "ok": path.exists(), "detail": str(path)})
+
+    for tool in ["qmd", "summarize"]:
+        resolved = resolve_tool(vault, tool)
+        checks.append({"name": f"tool:{tool}", "ok": bool(resolved), "detail": resolved or "not found"})
+
+    pending_ok, pending_error = json_readable(state_paths(vault)["pending"])
+    checks.append({"name": "state:pending-json", "ok": pending_ok, "detail": pending_error or "readable"})
+
+    qmd = qmd_report(vault, pages)
+    checks.append({"name": "qmd:last-embed-known", "ok": not qmd["unknown"], "detail": qmd.get("last_embed_at") or "unknown"})
+    checks.append({"name": "qmd:not-stale", "ok": not qmd["stale"], "detail": json.dumps(qmd, sort_keys=True)})
+
+    for rel in ["scripts/hook-prompt-submit.sh", "scripts/hook-session-end.sh", "scripts/on-raw-change.sh", "scripts/schedule-embed.sh"]:
+        path = vault / rel
+        checks.append({"name": f"script:{rel}", "ok": path.exists() and os.access(path, os.X_OK), "detail": str(path)})
+
+    if sys.platform == "darwin":
+        labels = launchd_labels(vault)
+        for kind, label in labels.items():
+            result = subprocess.run(["launchctl", "list", label], text=True, capture_output=True)
+            checks.append({"name": f"launchd:{kind}", "ok": result.returncode == 0, "detail": label})
+    else:
+        checks.append({"name": "launchd", "ok": True, "detail": "skipped on non-macOS"})
+
+    latest_error = latest_automation_error(vault)
+    checks.append({"name": "automation:last-error", "ok": latest_error is None, "detail": latest_error or "none"})
+
+    failed = [check for check in checks if not check["ok"]]
+    report = {"ok": not failed, "checks": checks, "qmd": qmd, "latest_automation_error": latest_error}
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        print("# mindsync doctor")
+        for check in checks:
+            status = "ok" if check["ok"] else "fail"
+            print(f"{status:4} {check['name']} - {check['detail']}")
+    return 0 if not failed else 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -734,6 +1097,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("queue-scan")
     p.add_argument("--vault", default=".")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--min-age-seconds", type=int, default=30)
     p.set_defaults(func=command_queue_scan)
 
     p = sub.add_parser("pending")
@@ -750,6 +1114,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("lint")
     p.add_argument("--vault", default=".")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--stale-days", type=int, default=90)
     p.set_defaults(func=command_lint)
 
     p = sub.add_parser("queue-enrichment")
@@ -784,9 +1149,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--vault", default=".")
     p.set_defaults(func=command_checkpoint)
 
+    p = sub.add_parser("embed")
+    p.add_argument("--vault", default=".")
+    p.add_argument("--lock-timeout", type=float, default=30.0)
+    p.set_defaults(func=command_embed)
+
     p = sub.add_parser("mark-embed")
     p.add_argument("--vault", default=".")
     p.set_defaults(func=command_mark_embed)
+
+    p = sub.add_parser("doctor")
+    p.add_argument("--vault", default=".")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_doctor)
 
     return parser
 

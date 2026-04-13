@@ -44,7 +44,7 @@ if [ ! -f "$SCRIPT" ]; then
 fi
 
 if [ -f "$SCRIPT" ]; then
-  python3 "$SCRIPT" queue-scan --vault "$(pwd)" >/dev/null 2>&1 || true
+  python3 "$SCRIPT" queue-scan --vault "$(pwd)" --min-age-seconds 0 >/dev/null 2>&1 || true
 fi
 
 echo "New raw source queued: $FILENAME"

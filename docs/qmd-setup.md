@@ -22,10 +22,14 @@ npm install -g @tobilu/qmd
 ```bash
 "$QMD" collection add ~/path/to/wiki --name mywiki
 "$QMD" context add qmd://mywiki "Personal second brain"
-"$QMD" embed
+python3 scripts/mindsync.py embed --vault ~/path/to/wiki
 ```
 
-Run `qmd embed` again after ingesting many new sources (rebuilds the vector index).
+Run mindsync's embed wrapper after ingesting many new sources. It serializes concurrent embeds and records freshness state:
+
+```bash
+python3 scripts/mindsync.py embed --vault .
+```
 
 ## CLI usage
 
@@ -55,5 +59,5 @@ With MCP configured, supported agents call qmd natively without shell commands.
 ## Re-embed after bulk ingestion
 
 ```bash
-qmd embed
+python3 scripts/mindsync.py embed --vault .
 ```

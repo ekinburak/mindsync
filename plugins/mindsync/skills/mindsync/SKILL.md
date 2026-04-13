@@ -32,6 +32,8 @@ python3 scripts/mindsync.py pending --vault .
 python3 scripts/mindsync.py lint --vault .
 python3 scripts/mindsync.py chart --vault . --data <data.csv> --title "<title>"
 python3 scripts/mindsync.py export-training --vault .
+python3 scripts/mindsync.py embed --vault .
+python3 scripts/mindsync.py doctor --vault .
 ```
 
 ## Agent Responsibilities
