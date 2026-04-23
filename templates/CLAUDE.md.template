@@ -10,7 +10,7 @@ Everything you do serves this. Do not read from the wiki unless the task needs k
 
 You maintain this wiki. You write and update all files in `wiki/`, `index.md`, `_hot.md` suggestions, and `log.md`. {{NAME}} curates raw sources and asks questions. You do the rest.
 
-**Every session:** Read `_hot.md` first, then `index.md`, then the last 10 entries of `log.md` before doing anything else.
+**For wiki tasks:** Read `_hot.md` first, then `index.md`, then the last 10 entries of `log.md` before making durable wiki changes.
 
 ---
 
@@ -45,7 +45,7 @@ When a task needs knowledge context, follow this retrieval protocol in order:
 
 ## Deterministic Helper
 
-Use `python3 scripts/mindsync.py` for mechanical work:
+Use `{{HELPER_COMMAND}}` for mechanical work:
 
 - `ensure-tools` and `tool-path` for required project-local qmd/summarize dependencies and optional agent-browser
 - `queue-scan` and `pending` for new raw sources and image assets
@@ -54,22 +54,65 @@ Use `python3 scripts/mindsync.py` for mechanical work:
 - `queue-enrichment` and `fetch-enrichment` for missing-data enrichment queues
 - `chart` for matplotlib PNGs saved under `wiki/analyses/assets/`
 - `export-training` for JSONL Q&A dataset exports
-- `checkpoint` before automated wiki writes
+- `checkpoint` before durable wiki writes
 - `embed` to rebuild qmd under a lock and record freshness state
-- `doctor` to verify vault structure, tools, watchers, state, and qmd freshness
+- `doctor` to verify vault structure, tools, state, and qmd freshness
 - `mark-embed` after qmd embed completes outside the helper
 
-Before zero-touch wiki writes, run:
+Before durable wiki writes, run:
 
 ```bash
-python3 scripts/mindsync.py checkpoint --vault .
+{{HELPER_COMMAND}} checkpoint --vault {{VAULT_REF}}
 ```
 
 Before qmd/summarize workflows, bootstrap required local tools if missing:
 
 ```bash
-python3 scripts/mindsync.py ensure-tools --vault . --tool qmd --tool summarize
+{{HELPER_COMMAND}} ensure-tools --vault {{VAULT_REF}} --tool qmd --tool summarize
 ```
+
+---
+
+## Execution Guardrails
+
+### 1. Think Before Writing
+
+Don't assume. Surface ambiguity and tradeoffs before durable wiki changes.
+
+- State assumptions explicitly when source material or user intent is unclear.
+- If multiple interpretations would change the wiki differently, present them instead of choosing silently.
+- If a simpler or safer approach exists, say so.
+- If a missing fact would materially change the result, stop and ask.
+
+### 2. Simplicity First
+
+Minimum durable change that solves the task. Nothing speculative.
+
+- No new sections, tags, folders, or pages unless they are actually needed.
+- Prefer updating an existing page over inventing a new structure.
+- No speculative flexibility or future-proofing in the wiki layout.
+- If a summary can be shorter without losing meaning, shorten it.
+
+### 3. Surgical Changes
+
+Touch only what you must. Clean up only your own mess.
+
+- Don't rewrite adjacent pages, formatting, or frontmatter unless the task requires it.
+- Match the vault's existing style and linking patterns.
+- If you notice unrelated cleanup, mention it instead of doing it.
+- Remove only the unused artifacts that your own change created.
+
+The test: every durable edit should trace directly to the user's request or the required ingest/query workflow.
+
+### 4. Goal-Driven Execution
+
+Define success criteria. Verify before you stop.
+
+- Ingest: queue scan, write the source page, update linked pages, update `index.md`, append `log.md`, mark ingested, then embed if available.
+- Query: answer from `_hot.md`, `index.md`, relevant pages, and qmd fallback; cite with `[[wiki/path]]`.
+- Lint or structure work: run the helper checks needed to prove the vault is still consistent.
+
+For multi-step tasks, state a brief plan with a verification step for each stage.
 
 ---
 
@@ -106,17 +149,17 @@ sources: []
 ## Workflows
 
 ### INGEST
-Run `/mindsync ingest` or triggered automatically by file watcher.
+Run `/mindsync ingest` when the user asks to process raw sources.
 
-1. Run `python3 scripts/mindsync.py queue-scan --vault .`
-2. Read queued sources with `python3 scripts/mindsync.py pending --vault .`
+1. Run `{{HELPER_COMMAND}} queue-scan --vault {{VAULT_REF}}`
+2. Read queued sources with `{{HELPER_COMMAND}} pending --vault {{VAULT_REF}}`
 3. Read each source or image asset
 4. Write `wiki/sources/YYYY-MM-DD-slug.md`
 5. Update relevant `wiki/entities/` and `wiki/concepts/` pages
 6. Update `index.md`
 7. Append to `log.md`: `## [YYYY-MM-DD] ingest | Source Title`
-8. Mark source hash with `python3 scripts/mindsync.py mark-ingested --vault . --path <raw-path> --page <wiki-page>`
-9. Run `python3 scripts/mindsync.py embed --vault .` if qmd is available
+8. Mark source hash with `{{HELPER_COMMAND}} mark-ingested --vault {{VAULT_REF}} --path <raw-path> --page <wiki-page>`
+9. Run `{{HELPER_COMMAND}} embed --vault {{VAULT_REF}}` if qmd is available
 10. Suggest `_hot.md` updates if relevant
 
 Image assets should be described with captions, visible concepts, and local asset links.

@@ -63,6 +63,14 @@ def rel_to_vault(path: Path, vault: Path) -> str:
     return path.resolve().relative_to(vault.resolve()).as_posix()
 
 
+def display_path(path: Path, base: Path) -> str:
+    try:
+        rel = path.resolve().relative_to(base.resolve()).as_posix()
+        return rel or "."
+    except ValueError:
+        return str(path)
+
+
 def read_json(path: Path, default: Any) -> Any:
     if not path.exists():
         return default
@@ -112,12 +120,12 @@ def file_lock(vault: Path, name: str, timeout: float = 30.0):
             pass
 
 
-def automation_log_path(vault: Path) -> Path:
-    return state_paths(vault)["state"] / "automation.log"
+def helper_log_path(vault: Path) -> Path:
+    return state_paths(vault)["state"] / "helper.log"
 
 
-def log_automation(vault: Path, level: str, message: str) -> None:
-    path = automation_log_path(vault)
+def log_helper(vault: Path, level: str, message: str) -> None:
+    path = helper_log_path(vault)
     path.parent.mkdir(parents=True, exist_ok=True)
     line = f"{now_iso()} {level.upper()} vault={vault} {message}\n"
     with path.open("a", encoding="utf-8") as f:
@@ -138,6 +146,32 @@ def render_template(name: str, values: dict[str, str]) -> str:
     for key, value in values.items():
         text = text.replace("{{" + key + "}}", value)
     return text
+
+
+def root_pointer_text(vault_ref: str, helper_command: str) -> str:
+    return (
+        "# MindSync\n\n"
+        f"The MindSync vault lives in `{vault_ref}/`.\n\n"
+        f"For wiki tasks, read `{vault_ref}/AGENTS.md` first. Raw files are source records; process them only when the user asks for ingest.\n\n"
+        "Useful commands from the project root:\n\n"
+        "```bash\n"
+        f"{helper_command} pending --vault {vault_ref}\n"
+        f"{helper_command} lint --vault {vault_ref}\n"
+        f"{helper_command} embed --vault {vault_ref}\n"
+        "```\n"
+    )
+
+
+def write_root_pointer(project_root: Path, vault_ref: str, helper_command: str) -> None:
+    pointer = project_root / "AGENTS.md"
+    snippet = root_pointer_text(vault_ref, helper_command)
+    if pointer.exists():
+        print(f"Root AGENTS.md already exists: {pointer}")
+        print("Add this MindSync pointer if useful:")
+        print(snippet)
+        return
+    pointer.write_text(snippet, encoding="utf-8")
+    print(f"Wrote root MindSync pointer: {pointer}")
 
 
 def state_paths(vault: Path) -> dict[str, Path]:
@@ -244,7 +278,8 @@ def command_tool_path(args: argparse.Namespace) -> int:
         return 2
     path = resolve_tool(vault, args.tool)
     if not path:
-        print(f"{args.tool} not found. Run: python3 scripts/mindsync.py ensure-tools --vault . --tool {args.tool}", file=sys.stderr)
+        helper = Path(sys.argv[0]).as_posix()
+        print(f"{args.tool} not found. Run: python3 {helper} ensure-tools --vault {args.vault} --tool {args.tool}", file=sys.stderr)
         return 1
     print(path)
     return 0
@@ -253,6 +288,10 @@ def command_tool_path(args: argparse.Namespace) -> int:
 def command_init(args: argparse.Namespace) -> int:
     vault = vault_root(args.vault)
     wiki_name = args.wiki_name or vault.name
+    nested_project_vault = vault.name == "mindsync"
+    project_root = vault.parent if nested_project_vault else vault
+    vault_ref = display_path(vault, project_root) if nested_project_vault else "."
+    helper_command = f"python3 {vault_ref}/scripts/mindsync.py" if nested_project_vault else "python3 scripts/mindsync.py"
     values = {
         "WIKI_NAME": wiki_name,
         "NAME": args.name,
@@ -260,6 +299,8 @@ def command_init(args: argparse.Namespace) -> int:
         "DOMAIN_DESCRIPTION": args.domain,
         "PRIORITY": args.priority,
         "VAULT_PATH": str(vault),
+        "VAULT_REF": vault_ref,
+        "HELPER_COMMAND": helper_command,
         "DATE": today(),
     }
 
@@ -293,7 +334,7 @@ def command_init(args: argparse.Namespace) -> int:
         "vault": str(vault),
         "wiki_name": wiki_name,
         "domain": args.domain,
-        "automation": args.automation,
+        "mode": args.mode,
         "adapters": sorted(set(agents)),
         "qmd_collection": wiki_name,
         "raw_policy": "append-only",
@@ -303,24 +344,13 @@ def command_init(args: argparse.Namespace) -> int:
     write_json(state_paths(vault)["config"], config)
     ensure_state(vault)
 
-    # Keep a legacy marker so older watcher scripts do not fail.
-    legacy_marker = vault / "raw" / ".last-ingest"
-    if not legacy_marker.exists():
-        legacy_marker.touch()
-
     if not args.no_copy_scripts:
         for script in (REPO_ROOT / "scripts").iterdir():
             should_copy = (
                 script.is_file()
                 and (
                     script.name.startswith("mindsync")
-                    or script.name.startswith("hook-")
-                    or script.name
-                    in {
-                "on-raw-change.sh",
-                "schedule-embed.sh",
-                "generate-graph.sh",
-                    }
+                    or script.name == "generate-graph.sh"
                 )
             )
             if should_copy:
@@ -328,8 +358,11 @@ def command_init(args: argparse.Namespace) -> int:
                 shutil.copy2(script, target)
                 target.chmod(target.stat().st_mode | 0o111)
 
+    if nested_project_vault:
+        write_root_pointer(project_root, vault_ref, helper_command)
+
     print(f"Initialized mindsync vault: {vault}")
-    print(f"Automation: {args.automation}")
+    print(f"Mode: {args.mode}")
     print(f"Adapters: {', '.join(sorted(set(agents)))}")
     return 0
 
@@ -951,17 +984,17 @@ def command_embed(args: argparse.Namespace) -> int:
     qmd = resolve_tool(vault, "qmd")
     if not qmd:
         message = "qmd not found; run ensure-tools"
-        log_automation(vault, "error", f"embed skipped: {message}")
+        log_helper(vault, "error", f"embed skipped: {message}")
         print(message, file=sys.stderr)
         return 1
     try:
         with file_lock(vault, "embed", timeout=args.lock_timeout):
-            log_automation(vault, "info", "qmd embed start")
+            log_helper(vault, "info", "qmd embed start")
             subprocess.run([qmd, "embed"], cwd=vault, check=True)
             write_json(state_paths(vault)["last_embed"], {"at": now_iso(), "mtime": dt.datetime.now().timestamp()})
-            log_automation(vault, "info", "qmd embed complete")
+            log_helper(vault, "info", "qmd embed complete")
     except Exception as exc:
-        log_automation(vault, "error", f"qmd embed failed: {exc}")
+        log_helper(vault, "error", f"qmd embed failed: {exc}")
         print(f"qmd embed failed: {exc}", file=sys.stderr)
         return 1
     print("Embedded wiki and recorded qmd timestamp.")
@@ -974,27 +1007,6 @@ def command_mark_embed(args: argparse.Namespace) -> int:
     write_json(state_paths(vault)["last_embed"], {"at": now_iso(), "mtime": dt.datetime.now().timestamp()})
     print("Recorded qmd embed timestamp.")
     return 0
-
-
-def vault_label_suffix(vault: Path) -> str:
-    digest = hashlib.sha256(str(vault).encode("utf-8")).hexdigest()[:8]
-    return f"{slugify(vault.name)}.{digest}"
-
-
-def launchd_labels(vault: Path) -> dict[str, str]:
-    suffix = vault_label_suffix(vault)
-    return {"wiki": f"com.mindsync.wiki.{suffix}", "raw": f"com.mindsync.raw.{suffix}"}
-
-
-def latest_automation_error(vault: Path) -> str | None:
-    path = automation_log_path(vault)
-    if not path.exists():
-        return None
-    latest = None
-    for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        if " ERROR " in line:
-            latest = line
-    return latest
 
 
 def json_readable(path: Path) -> tuple[bool, str | None]:
@@ -1039,23 +1051,12 @@ def command_doctor(args: argparse.Namespace) -> int:
     checks.append({"name": "qmd:last-embed-known", "ok": not qmd["unknown"], "detail": qmd.get("last_embed_at") or "unknown"})
     checks.append({"name": "qmd:not-stale", "ok": not qmd["stale"], "detail": json.dumps(qmd, sort_keys=True)})
 
-    for rel in ["scripts/hook-prompt-submit.sh", "scripts/hook-session-end.sh", "scripts/on-raw-change.sh", "scripts/schedule-embed.sh"]:
+    for rel in ["scripts/mindsync.py", "scripts/generate-graph.sh"]:
         path = vault / rel
         checks.append({"name": f"script:{rel}", "ok": path.exists() and os.access(path, os.X_OK), "detail": str(path)})
 
-    if sys.platform == "darwin":
-        labels = launchd_labels(vault)
-        for kind, label in labels.items():
-            result = subprocess.run(["launchctl", "list", label], text=True, capture_output=True)
-            checks.append({"name": f"launchd:{kind}", "ok": result.returncode == 0, "detail": label})
-    else:
-        checks.append({"name": "launchd", "ok": True, "detail": "skipped on non-macOS"})
-
-    latest_error = latest_automation_error(vault)
-    checks.append({"name": "automation:last-error", "ok": latest_error is None, "detail": latest_error or "none"})
-
     failed = [check for check in checks if not check["ok"]]
-    report = {"ok": not failed, "checks": checks, "qmd": qmd, "latest_automation_error": latest_error}
+    report = {"ok": not failed, "checks": checks, "qmd": qmd}
     if args.json:
         print(json.dumps(report, indent=2))
     else:
@@ -1088,7 +1089,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--domain", default="personal knowledge base")
     p.add_argument("--priority", default="maintain an accurate, useful wiki")
     p.add_argument("--wiki-name")
-    p.add_argument("--automation", choices=["zero-touch", "queued", "manual"], default="zero-touch")
+    p.add_argument("--mode", choices=["action-first", "manual"], default="action-first")
     p.add_argument("--agent", action="append", choices=["claude", "codex", "openclaw"])
     p.add_argument("--force", action="store_true")
     p.add_argument("--no-copy-scripts", action="store_true")

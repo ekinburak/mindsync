@@ -39,5 +39,5 @@ After saving to `raw/`, run `/mindsync ingest` to process it into the wiki.
 
 ```bash
 "$SUMMARIZE" https://example.com/article > raw/$(date +%Y-%m-%d)-article.md
-# Then tell your agent: "ingest this" — or let the file watcher queue it
+# Then tell your agent: "ingest this"
 ```

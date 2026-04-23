@@ -46,8 +46,97 @@ class MindsyncHelperTests(unittest.TestCase):
             self.assertTrue((vault / ".mindsync" / "state" / "pending-ingest.json").exists())
             self.assertTrue((vault / "wiki" / "analyses" / "assets").is_dir())
             config = json.loads((vault / ".mindsync" / "config.json").read_text())
-            self.assertEqual(config["automation"], "zero-touch")
+            self.assertEqual(config["mode"], "action-first")
             self.assertIn("codex", config["adapters"])
+            self.assertTrue((vault / "scripts" / "mindsync.py").exists())
+            self.assertFalse((vault / "scripts" / "on-raw-change.sh").exists())
+            self.assertFalse((vault / "scripts" / "schedule-embed.sh").exists())
+            self.assertFalse((vault / "scripts" / "hook-prompt-submit.sh").exists())
+            self.assertFalse((vault / "scripts" / "hook-auto-ingest.sh").exists())
+            self.assertFalse((vault / "scripts" / "hook-session-end.sh").exists())
+
+    def test_init_nested_mindsync_vault_keeps_project_root_clean(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            project.mkdir()
+            vault = project / "mindsync"
+
+            run_cmd(
+                "init",
+                "--vault",
+                str(vault),
+                "--name",
+                "Tester",
+                "--domain",
+                "nested research",
+                "--priority",
+                "keep facts clean",
+            )
+
+            self.assertTrue((vault / "wiki").is_dir())
+            self.assertTrue((vault / "raw").is_dir())
+            self.assertTrue((vault / ".mindsync" / "state").is_dir())
+            self.assertTrue((vault / "AGENTS.md").exists())
+            self.assertTrue((vault / "CLAUDE.md").exists())
+
+            self.assertTrue((project / "AGENTS.md").exists())
+            pointer = (project / "AGENTS.md").read_text(encoding="utf-8")
+            self.assertIn("The MindSync vault lives in `mindsync/`", pointer)
+            self.assertIn("python3 mindsync/scripts/mindsync.py pending --vault mindsync", pointer)
+
+            self.assertFalse((project / "wiki").exists())
+            self.assertFalse((project / "raw").exists())
+            self.assertFalse((project / "_hot.md").exists())
+            self.assertFalse((project / "index.md").exists())
+            self.assertFalse((project / "log.md").exists())
+
+            agents = (vault / "AGENTS.md").read_text(encoding="utf-8")
+            claude = (vault / "CLAUDE.md").read_text(encoding="utf-8")
+            self.assertIn("python3 mindsync/scripts/mindsync.py pending --vault mindsync", agents)
+            self.assertIn("python3 mindsync/scripts/mindsync.py embed --vault mindsync", agents)
+            self.assertIn("python3 mindsync/scripts/mindsync.py pending --vault mindsync", claude)
+
+    def test_init_legacy_root_vault_still_works(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            project.mkdir()
+
+            run_cmd(
+                "init",
+                "--vault",
+                ".",
+                "--name",
+                "Tester",
+                "--domain",
+                "root research",
+                "--priority",
+                "keep facts clean",
+                cwd=project,
+            )
+
+            self.assertTrue((project / "wiki").is_dir())
+            self.assertTrue((project / "raw").is_dir())
+            self.assertTrue((project / "_hot.md").exists())
+            self.assertTrue((project / "index.md").exists())
+            self.assertTrue((project / "log.md").exists())
+            self.assertFalse((project / "mindsync").exists())
+
+            agents = (project / "AGENTS.md").read_text(encoding="utf-8")
+            self.assertIn("python3 scripts/mindsync.py pending --vault .", agents)
+            self.assertNotIn("python3 mindsync/scripts/mindsync.py", agents)
+
+    def test_init_nested_does_not_overwrite_existing_root_agents(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            project.mkdir()
+            root_agents = project / "AGENTS.md"
+            root_agents.write_text("# Existing Instructions\n", encoding="utf-8")
+
+            result = run_cmd("init", "--vault", str(project / "mindsync"), "--no-copy-scripts")
+
+            self.assertEqual(root_agents.read_text(encoding="utf-8"), "# Existing Instructions\n")
+            self.assertIn("Root AGENTS.md already exists", result.stdout)
+            self.assertIn("mindsync/AGENTS.md", result.stdout)
 
     def test_queue_scan_and_mark_ingested_deduplicates(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -212,11 +301,45 @@ class MindsyncHelperTests(unittest.TestCase):
                 json.loads(path.read_text(encoding="utf-8"))
             self.assertFalse(list(state.glob(".*.tmp")))
 
-    def test_raw_watcher_scripts_do_not_embed_qmd(self):
-        raw_script = (ROOT / "scripts" / "on-raw-change.sh").read_text(encoding="utf-8")
-        schedule_script = (ROOT / "scripts" / "schedule-embed.sh").read_text(encoding="utf-8")
-        self.assertNotIn("qmd embed", raw_script)
-        self.assertIn("raw/ changes -> queue pending ingest only", schedule_script)
+    def test_watcher_and_hook_scripts_are_not_in_codebase(self):
+        removed = [
+            "on-raw-change.sh",
+            "schedule-embed.sh",
+            "hook-prompt-submit.sh",
+            "hook-auto-ingest.sh",
+            "hook-session-end.sh",
+        ]
+        for name in removed:
+            self.assertFalse((ROOT / "scripts" / name).exists(), name)
+
+    def test_doctor_does_not_check_launchd_or_hooks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp) / "vault"
+            run_cmd("init", "--vault", str(vault))
+
+            result = subprocess.run(
+                [sys.executable, str(HELPER), "doctor", "--vault", str(vault), "--json"],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            data = json.loads(result.stdout)
+            names = {check["name"] for check in data["checks"]}
+            self.assertFalse(any(name.startswith("launchd") for name in names))
+            self.assertFalse(any("hook-" in name for name in names))
+
+    def test_docs_describe_action_first_ingest(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        init_skill = (ROOT / "skills" / "mindsync-init.md").read_text(encoding="utf-8")
+        claude_template = (ROOT / "templates" / "CLAUDE.md.template").read_text(encoding="utf-8")
+
+        combined = "\n".join([readme, init_skill, claude_template])
+        self.assertIn("Raw files are source records", combined)
+        self.assertIn("python3 mindsync/scripts/mindsync.py embed --vault mindsync", combined)
+        self.assertNotIn("triggered automatically by file watcher", combined)
+        self.assertNotIn("schedule-embed.sh", combined)
+        self.assertNotIn("on-raw-change.sh", combined)
+        self.assertNotIn("UserPromptSubmit", combined)
 
     def test_export_training_writes_jsonl(self):
         with tempfile.TemporaryDirectory() as tmp:

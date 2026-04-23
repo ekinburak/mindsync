@@ -1,6 +1,6 @@
 ---
 name: mindsync-ingest
-description: Zero-touch ingest pending raw sources and image assets into the compiled markdown wiki
+description: User-action ingest of pending raw sources and image assets into the compiled markdown wiki
 trigger: /mindsync ingest
 metadata:
   openclaw:
@@ -26,7 +26,7 @@ python3 scripts/mindsync.py pending --vault .
 
 If there are no pending sources, stop.
 
-Before automated writes:
+Before durable wiki writes:
 
 ```bash
 python3 scripts/mindsync.py checkpoint --vault .

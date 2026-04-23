@@ -35,7 +35,7 @@ When context is needed, read in this order:
 
 ## Deterministic Helper
 
-Prefer `python3 scripts/mindsync.py` for mechanical work:
+Prefer `{{HELPER_COMMAND}}` for mechanical work:
 
 - `ensure-tools`: install project-local npm CLIs under `.mindsync/tools/`.
 - `tool-path`: resolve local or global tool binaries.
@@ -49,16 +49,46 @@ Prefer `python3 scripts/mindsync.py` for mechanical work:
 - `export-training`: export JSONL Q&A examples from the wiki.
 - `checkpoint`: write a git diff checkpoint under `.mindsync/state/checkpoints/`.
 - `embed`: rebuild qmd under a lock and record freshness state.
-- `doctor`: verify vault structure, tools, watchers, state, and qmd freshness.
+- `doctor`: verify vault structure, tools, state, and qmd freshness.
 - `mark-embed`: record the qmd embed timestamp when embedding was run externally.
 
-Before automated wiki writes, run `python3 scripts/mindsync.py checkpoint --vault .`.
+Before durable wiki writes, run `{{HELPER_COMMAND}} checkpoint --vault {{VAULT_REF}}`.
 
 Before qmd/summarize workflows, bootstrap required local tools if missing:
 
 ```bash
-python3 scripts/mindsync.py ensure-tools --vault . --tool qmd --tool summarize
+{{HELPER_COMMAND}} ensure-tools --vault {{VAULT_REF}} --tool qmd --tool summarize
 ```
+
+## Execution Guardrails
+
+### 1. Think Before Writing
+
+- State assumptions when source material, user intent, or page scope is ambiguous.
+- If multiple valid interpretations would produce different wiki changes, surface them instead of picking silently.
+- Push back on requests that would weaken the vault's accuracy, structure, or append-only guarantees.
+- Stop and ask when a missing fact would materially change the output.
+
+### 2. Simplicity First
+
+- Make the minimum durable change that solves the task.
+- Do not create speculative sections, tags, templates, or pages the user did not ask for.
+- Prefer extending an existing page over introducing a new abstraction or filing structure.
+- Keep summaries tight and information-dense.
+
+### 3. Surgical Changes
+
+- Touch only the files needed for the requested wiki change.
+- Do not rewrite adjacent pages, comments, frontmatter, or formatting unless the task requires it.
+- Remove only the orphans created by your own edits.
+- If you notice unrelated cleanup, mention it rather than doing it opportunistically.
+
+### 4. Goal-Driven Execution
+
+- Define what success looks like before durable writes.
+- For ingest: verify queue state, write the required pages, update `index.md`, append `log.md`, then mark the source ingested.
+- For query/output tasks: verify citations resolve and file the result only when the synthesis is worth keeping.
+- For structural changes: run the helper checks needed to prove the vault still validates.
 
 ## Page Conventions
 
@@ -81,13 +111,13 @@ Use Obsidian links: `[[wiki/path/slug]]`.
 
 ### Ingest
 
-1. Run `python3 scripts/mindsync.py queue-scan --vault .`.
-2. Read pending items with `python3 scripts/mindsync.py pending --vault .`.
+1. Run `{{HELPER_COMMAND}} queue-scan --vault {{VAULT_REF}}`.
+2. Read pending items with `{{HELPER_COMMAND}} pending --vault {{VAULT_REF}}`.
 3. For each source, compile a source page and update related entity/concept pages.
 4. Update `index.md`.
 5. Append to `log.md`.
-6. Run `python3 scripts/mindsync.py mark-ingested --vault . --path <raw-path> --page <wiki-page>`.
-7. Run `python3 scripts/mindsync.py embed --vault .` when qmd is available.
+6. Run `{{HELPER_COMMAND}} mark-ingested --vault {{VAULT_REF}} --path <raw-path> --page <wiki-page>`.
+7. Run `{{HELPER_COMMAND}} embed --vault {{VAULT_REF}}` when qmd is available.
 
 Image assets should be described in the related source page with captions,
 visible concepts, and links to the local asset path.
@@ -103,7 +133,7 @@ with `[[wiki/path/slug]]`. Valuable syntheses should be filed in
 For chart answers, create a small CSV or JSON data file if needed, then run:
 
 ```bash
-python3 scripts/mindsync.py chart --vault . --data <data.csv> --title "<title>" --kind bar
+{{HELPER_COMMAND}} chart --vault {{VAULT_REF}} --data <data.csv> --title "<title>" --kind bar
 ```
 
 Embed the returned `![[wiki/analyses/assets/...png]]` link in the analysis page.
@@ -113,7 +143,7 @@ Embed the returned `![[wiki/analyses/assets/...png]]` link in the analysis page.
 Run deterministic lint first:
 
 ```bash
-python3 scripts/mindsync.py lint --vault .
+{{HELPER_COMMAND}} lint --vault {{VAULT_REF}}
 ```
 
 Then use LLM judgment for contradictions, synthesis gaps, and article candidates.
@@ -123,7 +153,7 @@ Then use LLM judgment for contradictions, synthesis gaps, and article candidates
 Generate an export-only JSONL dataset:
 
 ```bash
-python3 scripts/mindsync.py export-training --vault . --output wiki/analyses/training-export.jsonl
+{{HELPER_COMMAND}} export-training --vault {{VAULT_REF}} --output wiki/analyses/training-export.jsonl
 ```
 
 Do not train a model unless explicitly asked.

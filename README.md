@@ -76,20 +76,20 @@ The canonical project instruction file is `AGENTS.md`. `CLAUDE.md` is generated 
 | Required | Python 3 | Runs `scripts/mindsync.py`, queues, lint, hashes, exports, and scaffold logic | Yes |
 | Required | qmd | Local wiki search and embedding fallback when `index.md` is not enough | Yes |
 | Required | summarize | Converts URLs, PDFs, YouTube, and podcasts into raw markdown sources | Yes |
-| Optional power-user | agent-browser | Browser automation for JavaScript-heavy pages, interactive sites, screenshots, and autonomous web research | No |
+| Optional power-user | agent-browser | Browser control for JavaScript-heavy pages, interactive sites, screenshots, and agent-led web research | No |
 | Optional visual output | matplotlib | Renders generated data charts into PNGs under `wiki/analyses/assets/` | No |
 
-Install required tools project-locally inside a vault:
+Install required tools project-locally inside the default nested vault:
 
 ```bash
-python3 scripts/mindsync.py ensure-tools --vault . --tool qmd --tool summarize
+python3 mindsync/scripts/mindsync.py ensure-tools --vault mindsync --tool qmd --tool summarize
 ```
 
 They install under `.mindsync/tools/`, not globally. Use `tool-path` to resolve
 the runnable binary:
 
 ```bash
-QMD=$(python3 scripts/mindsync.py tool-path --vault . qmd)
+QMD=$(python3 mindsync/scripts/mindsync.py tool-path --vault mindsync qmd)
 "$QMD" search "zero touch ingest"
 ```
 
@@ -102,43 +102,46 @@ expects `qmd` and `summarize`.
 2. Install project-local adapters with `bash install.sh --scope project --agent all --target .`
 3. Initialize a vault:
    ```bash
-   python3 scripts/mindsync.py init --vault ~/Documents/mywiki --name "Your Name" --domain "research on X" --priority "maintain an accurate wiki"
+   python3 scripts/mindsync.py init --vault ./mindsync --name "Your Name" --domain "research on X" --priority "maintain an accurate wiki"
    ```
    Or run `/mindsync init` in an agent session and answer 4 questions:
    - Your name
    - What this wiki is for
    - The assistant's #1 priority
-   - Where to create the vault (any path — created automatically if it doesn't exist)
-4. Init sets up everything automatically:
-   - Full vault structure (`raw/`, `wiki/`, indexes, log)
-   - Personalized `AGENTS.md` plus Claude-compatible `CLAUDE.md`
+   - Where to create the vault (default: `./mindsync`)
+4. Init sets up the action-first vault:
+   - Full vault structure under `mindsync/` (`raw/`, `wiki/`, indexes, log)
+   - Personalized `mindsync/AGENTS.md` plus Claude-compatible `mindsync/CLAUDE.md`
+   - A tiny root `AGENTS.md` pointer if the project does not already have one
    - `.mindsync/` deterministic state, queues, source hashes, and checkpoints
    - qmd semantic search configured
    - Required local CLI dependencies under `.mindsync/tools/`
-   - Auto-ingest hook wired into the vault (optional)
-   - File watcher for `raw/` (optional)
-5. Drop a source into `raw/` and say "ingest" — or run `/mindsync ingest`
+5. Drop a source into `mindsync/raw/` and say "ingest" — or run `/mindsync ingest`
 
-**Multiple wikis:** Run `/mindsync init` in any folder to create a separate wiki for a different domain. Each vault is fully independent with its own `AGENTS.md`, Claude compatibility file, qmd collection, and hook configuration.
+**Legacy root layout:** If you intentionally want the project root itself to be the vault, run `python3 scripts/mindsync.py init --vault . ...`.
+
+**Multiple wikis:** Run `/mindsync init` with a different vault path to create a separate wiki for another domain. Each vault is fully independent with its own `AGENTS.md`, Claude compatibility file, qmd collection, and deterministic state.
 
 ## Vault structure (created by init)
 
 ```
-your-wiki/
-├── AGENTS.md        ← canonical agent-neutral vault instructions
-├── CLAUDE.md        ← Claude compatibility file
-├── _hot.md          ← active context: goals, open questions, key numbers (~500 tokens)
-├── index.md         ← full content catalog (LLM reads before every query)
-├── log.md           ← append-only history of every ingest, query, and lint
-├── .mindsync/       ← config, pending queues, hashes, checkpoints
-├── raw/             ← append-only source files
-│   └── assets/      ← downloaded images and attachments
-└── wiki/
-    ├── entities/    ← people, habits, projects, goals, places
-    ├── concepts/    ← ideas, frameworks, themes, mental models
-    ├── sources/     ← one summary page per ingested source
-    └── analyses/    ← filed query results, charts, slides, exports
-        └── assets/  ← generated PNGs and other analysis assets
+project/
+├── AGENTS.md        ← tiny pointer to mindsync/AGENTS.md
+└── mindsync/
+    ├── AGENTS.md    ← canonical agent-neutral vault instructions
+    ├── CLAUDE.md    ← Claude compatibility file
+    ├── _hot.md      ← active context: goals, open questions, key numbers (~500 tokens)
+    ├── index.md     ← full content catalog
+    ├── log.md       ← append-only history of every ingest, query, and lint
+    ├── .mindsync/   ← config, pending queues, hashes, checkpoints
+    ├── raw/         ← append-only source files
+    │   └── assets/  ← downloaded images and attachments
+    └── wiki/
+        ├── entities/
+        ├── concepts/
+        ├── sources/
+        └── analyses/
+            └── assets/
 ```
 
 ## How ingestion works
@@ -169,7 +172,7 @@ The expensive, intelligent step happens **once at ingest time**. Queries search 
 |-------|-------|-----------|-----------|
 | **Ingestion & queries** | Active LLM agent | During `/mindsync ingest`, `/mindsync query`, `/mindsync lint` | Reads sources, extracts entities and concepts, writes wiki pages, synthesizes answers |
 | **Deterministic helper** | `scripts/mindsync.py` | During init, ingest, lint, charts, export | Owns queues, hashes, lint checks, chart rendering, state, and checkpoints |
-| **Semantic search index** | qmd's local embedding model (on-device, no data leaves your machine) | After ingest via watcher/Stop hook | Embeds wiki pages for vector search — used as fallback when index.md isn't enough |
+| **Semantic search index** | qmd's local embedding model (on-device, no data leaves your machine) | After explicit ingest or explicit embed | Embeds wiki pages for vector search — used as fallback when index.md isn't enough |
 
 ### What the agent actually does during ingest
 
@@ -193,14 +196,14 @@ mindsync uses `qmd` and `summarize` as required local tools. `agent-browser` and
 qmd is a local semantic search engine for markdown files. It runs entirely on your device — no data leaves your machine. mindsync uses it as the last-resort retrieval step when the index file isn't enough to answer a query.
 
 **How it's used:**
-- During `init`: `python3 scripts/mindsync.py ensure-tools --vault . --tool qmd` can install qmd locally under `.mindsync/tools/`
+- During `init`: `python3 mindsync/scripts/mindsync.py ensure-tools --vault mindsync --tool qmd` can install qmd locally under `mindsync/.mindsync/tools/`
 - Your `wiki/` folder is registered as a qmd collection and embeddings are built
 - During queries: if `_hot.md` and `index.md` don't resolve the question, the agent runs `qmd query "<question>"` to search across all wiki pages semantically
-- After bulk ingestion: run `python3 scripts/mindsync.py embed --vault .` to rebuild the index with mindsync's embed lock
+- After bulk ingestion: run `python3 mindsync/scripts/mindsync.py embed --vault mindsync` to rebuild the index with mindsync's embed lock
 
 ```bash
-python3 scripts/mindsync.py ensure-tools --vault . --tool qmd
-QMD=$(python3 scripts/mindsync.py tool-path --vault . qmd)
+python3 mindsync/scripts/mindsync.py ensure-tools --vault mindsync --tool qmd
+QMD=$(python3 mindsync/scripts/mindsync.py tool-path --vault mindsync qmd)
 "$QMD" query "sleep habits"       # hybrid search (recommended)
 "$QMD" search "atomic habits"     # keyword only, fast
 "$QMD" vsearch "decision making"  # vector/semantic only
@@ -220,8 +223,8 @@ summarize converts web articles, YouTube videos, podcasts, and PDFs into clean m
 - You can also pipe it manually:
 
 ```bash
-python3 scripts/mindsync.py ensure-tools --vault . --tool summarize
-SUMMARIZE=$(python3 scripts/mindsync.py tool-path --vault . summarize)
+python3 mindsync/scripts/mindsync.py ensure-tools --vault mindsync --tool summarize
+SUMMARIZE=$(python3 mindsync/scripts/mindsync.py tool-path --vault mindsync summarize)
 
 # Article
 "$SUMMARIZE" https://example.com/article > raw/2026-04-09-article-title.md
@@ -236,7 +239,7 @@ SUMMARIZE=$(python3 scripts/mindsync.py tool-path --vault . summarize)
 "$SUMMARIZE" https://example.com/article > raw/$(date +%Y-%m-%d)-article.md
 ```
 
-After the file lands in `raw/`, run `/mindsync ingest` — or let the file watcher handle it automatically.
+After the file lands in `raw/`, run `/mindsync ingest`.
 
 ---
 
@@ -260,8 +263,8 @@ You do **not** need agent-browser for the core mindsync flow. Use it only when
 - During ingest: the agent can fetch a live page, screenshot it, and extract structured content
 
 ```bash
-python3 scripts/mindsync.py ensure-tools --vault . --tool agent-browser
-AGENT_BROWSER=$(python3 scripts/mindsync.py tool-path --vault . agent-browser)
+python3 mindsync/scripts/mindsync.py ensure-tools --vault mindsync --tool agent-browser
+AGENT_BROWSER=$(python3 mindsync/scripts/mindsync.py tool-path --vault mindsync agent-browser)
 "$AGENT_BROWSER" install   # downloads Chrome for Testing
 
 # MCP config (shown during /mindsync init)
@@ -288,7 +291,7 @@ agent's vision model.
 Use matplotlib when wiki data should become a durable chart:
 
 ```bash
-python3 scripts/mindsync.py chart --vault . --data .mindsync/state/chart.csv --title "Sources by Concept"
+python3 mindsync/scripts/mindsync.py chart --vault mindsync --data mindsync/.mindsync/state/chart.csv --title "Sources by Concept"
 ```
 
 The output is a PNG in `wiki/analyses/assets/` and can be embedded in Obsidian:
@@ -319,26 +322,19 @@ Output: `graph.json` in your vault root with nodes (pages) and edges (links betw
 
 Each vault is fully self-contained. Run `/mindsync init` in any folder to create a new wiki for a different domain — a research project, a team knowledge base, a book companion. Each gets its own `AGENTS.md`, Claude compatibility file, qmd collection, and retrieval configuration.
 
-## How automation works
+## How action-first ingest works
 
-This is the most important thing to understand about mindsync. **The wiki grows during agent sessions, not between them.** Every time you open an agent in your vault and run a skill, it compounds knowledge. Between sessions, background jobs keep the search index fresh.
+This is the most important thing to understand about mindsync. **Raw files are
+source records. They are processed only when the user asks an agent to ingest
+them.** The wiki grows during explicit agent sessions, not between them.
 
-See [`docs/automation-and-helper.md`](docs/automation-and-helper.md) for the deterministic queue, hash, lint, chart, export, and checkpoint commands.
-
-### What happens automatically (no input needed)
-
-| Trigger | What fires | Result |
-|---------|-----------|--------|
-| You drop a file in `raw/` via Finder, Obsidian Clipper, or terminal | watcher + `queue-scan` | Source is added to `.mindsync/state/pending-ingest.json` |
-| Agent writes a new file to `raw/` | runtime hook where supported | Source is queued immediately |
-| Next agent turn in zero-touch mode | pending queue | Agent compiles queued sources into `wiki/`, updates index/log, and records hashes |
-| Any Claude Code session ends in the vault | `Stop` hook | qmd index rebuilt silently in background if `wiki/` changed |
-| Every night at 2am | cron job (`schedule-embed.sh`) | qmd index rebuilt as a safety net |
+See [`docs/action-first-helper.md`](docs/action-first-helper.md) for the deterministic queue, hash, lint, chart, export, and checkpoint commands.
 
 ### What needs a command from you
 
 | You want | You say | What happens |
 |----------|---------|-------------|
+| To process raw files | `/mindsync ingest` | Agent scans `raw/`, compiles pending sources into `wiki/`, records hashes, and refreshes qmd |
 | An answer from your wiki | `/mindsync query` | Retrieval + synthesis + optional filing |
 | To find something fast | `/mindsync search sleep habits` | Ranked Obsidian links returned |
 | A health check | `/mindsync lint` | Gaps found, web enrichment offered |
@@ -346,107 +342,33 @@ See [`docs/automation-and-helper.md`](docs/automation-and-helper.md) for the det
 
 ### How raw/ → wiki/ works
 
-Files in `raw/` don't move automatically — they are intentionally immutable source records. What happens is:
+Files in `raw/` don't move automatically — they are intentionally immutable source records. When you run `/mindsync ingest`:
+
 1. `scripts/mindsync.py queue-scan` hashes the file and queues it if new
 2. The agent **reads** the file in `raw/`
 3. The agent **writes** structured pages into `wiki/sources/`, `wiki/entities/`, `wiki/concepts/`
 4. The agent **updates** `index.md` and appends to `log.md`
 5. `scripts/mindsync.py mark-ingested` records the source hash
-6. The wiki watcher, ingest workflow, or `Stop` hook rebuilds qmd so the new compiled pages are searchable
+6. `scripts/mindsync.py embed` refreshes qmd so the new compiled pages are searchable
 
 Existing `raw/` files stay untouched forever as your source of truth.
 
 ### How the qmd index stays fresh
 
-There are three layers keeping the search index current — each fires at a different moment:
-
-| Layer | When it fires | How |
-|-------|--------------|-----|
-| `Stop` hook | Every time you close a Claude Code session | `hook-session-end.sh` runs `python3 scripts/mindsync.py embed --vault .` in the background if wiki files changed |
-| **launchd WatchPaths** (macOS) | Within 30 seconds of file changes | `raw/` changes queue sources only; `wiki/` changes refresh qmd |
-| cron (Linux fallback) | Nightly at 2am | Standard cron job |
-
-**The launchd layer is the important one.** It keeps capture and search maintenance separate: clipped raw sources are queued without embedding raw text, and qmd is refreshed only after compiled wiki pages change.
-
-**Example timeline:**
-```
-3:00pm  You clip an article via Obsidian Clipper → lands in raw/
-3:00:30 launchd detects the change → source is queued
-3:01pm  You open your agent in the vault, type anything
-3:01pm  UserPromptSubmit hook detects queued source → agent compiles wiki pages
-3:01pm  Source hash recorded, ingest/Stop hook rebuilds qmd
-```
-
-**Set up during init** — `/mindsync init` runs `bash scripts/schedule-embed.sh <vault-path>` which installs the launchd job. To verify it's running:
+qmd is refreshed by the explicit ingest workflow after compiled wiki pages
+change. You can also refresh it manually:
 
 ```bash
-# Check the launchd job is loaded
-launchctl list | grep mindsync
-
-# Check the automation log
-cat .mindsync/state/automation.log
+python3 mindsync/scripts/mindsync.py embed --vault mindsync
 ```
 
-To remove a watcher, use the exact `launchctl unload` command printed by `scripts/schedule-embed.sh`. Labels include a short vault-path hash to avoid collisions.
-
-### Automation roadmap
-
-The target experience is: you manually add source material through Obsidian
-Clipper, Finder, or another capture tool, and mindsync handles everything after
-the file lands in `raw/`.
-
-- [x] **Detect clipped raw sources automatically**
-  Watch `raw/`, ignore temporary downloads, wait for files to settle, hash new
-  sources, and add them to `.mindsync/state/pending-ingest.json`.
-
-- [x] **Keep qmd fresh without embedding raw sources**
-  Watch `wiki/` for compiled-page changes and run
-  `python3 scripts/mindsync.py embed --vault .` under a lock. Raw watcher only
-  queues sources.
-
-- [x] **Repair the pending queue automatically**
-  Mark missing pending files, duplicate pending hashes, and already-ingested
-  hashes so the queue does not silently rot.
-
-- [x] **Expose automation health**
-  `python3 scripts/mindsync.py doctor --vault .` checks structure, tools,
-  watcher labels, pending JSON, qmd freshness, hook scripts, and latest
-  automation errors.
-
-- [ ] **Install and verify automation during init**
-  `/mindsync init` should install watchers, run `doctor`, and show a clear
-  pass/fail summary without requiring manual verification commands.
-
-- [ ] **Auto-ingest pending sources in unattended mode**
-  Add an explicit opt-in background worker that processes pending raw sources
-  into wiki pages, updates `index.md`/`log.md`, marks sources ingested, and
-  embeds qmd. This must preserve raw append-only behavior and write checkpoints.
-
-- [ ] **Automate weekly lint**
-  Schedule deterministic lint, write a short report to
-  `wiki/analyses/YYYY-MM-DD-lint-report.md`, and queue enrichment tasks for thin
-  or stale areas. Semantic page edits still require agent judgment.
-
-- [ ] **Automate stale-page review**
-  Report pages not updated in 90 days and suggest whether to refresh, archive,
-  or leave alone. Do not auto-edit stale pages.
-
-- [ ] **Automate enrichment fetches**
-  For enrichment items with URLs, fetch via `summarize`, save into `raw/`, and
-  let the normal pending ingest flow handle compilation.
-
-- [ ] **Automate recovery**
-  Detect watcher failures, corrupted state, stale qmd, and stuck locks; repair
-  what is safe and leave a visible action item for anything requiring judgment.
-
-- [ ] **Optional notification layer**
-  Surface pending counts, failed automation, and weekly lint summaries through
-  the user's preferred local channel instead of requiring `/mindsync status`.
+There are no file watchers, launchd jobs, cron jobs, or session hooks in the
+default flow.
 
 ### Best practices for a living wiki
 
 1. **Open your agent in the vault directory** — not a parent folder. This activates `AGENTS.md`/`CLAUDE.md` and local scripts.
-2. **Drop sources freely** — via Obsidian Clipper, Finder, terminal, anything. The hooks handle detection and ingestion automatically.
+2. **Drop sources freely** — via Obsidian Clipper, Finder, terminal, anything. Then ask the agent to ingest when you are ready.
 3. **Start sessions with `/mindsync status`** — see what's unprocessed, last activity, index freshness at a glance.
 4. **Run `/mindsync lint` weekly** — finds gaps, suggests new articles, auto-fills via web search.
 5. **Keep `_hot.md` under 500 words** — your active context. Prune resolved items. Status warns you when it grows too long.
@@ -459,8 +381,8 @@ the file lands in `raw/`.
 
 ### 🔴 High priority
 
-- [x] **Level 3 zero-touch queue via hooks** 🔵 *(most impactful)*
-  New raw files are hashed into `.mindsync/state/pending-ingest.json`. Runtime hooks inject the pending work into the next agent turn, and the agent compiles sources, updates index/log, and records source hashes.
+- [x] **Action-first ingest queue** 🔵 *(most impactful)*
+  `/mindsync ingest` hashes new raw files into `.mindsync/state/pending-ingest.json`, then the agent compiles sources, updates index/log, records source hashes, and refreshes qmd.
 
 - [x] **`/mindsync query` skill** 🟢
   A dedicated query skill enforces the retrieval order (`_hot.md` -> `index.md` -> pages -> `qmd`), files valuable answers as analyses, and enforces the 5-page read limit.
@@ -475,8 +397,8 @@ the file lands in `raw/`.
   Karpathy: *"impute missing data with web searchers."*
   Lint creates enrichment tasks in `.mindsync/state/enrichment-queue.json`; URL-backed tasks are fetched with `summarize` into `raw/` and then ingested.
 
-- [x] **Scheduled `qmd embed`** 🟢
-  A watcher, cron job, or runtime stop hook runs `python3 scripts/mindsync.py embed --vault .` so the vector index stays fresh after compiled wiki pages change.
+- [x] **Explicit `qmd embed` refresh** 🟢
+  `/mindsync ingest` runs `python3 mindsync/scripts/mindsync.py embed --vault mindsync` after compiled wiki pages change so the vector index stays fresh.
 
 ### 🟡 Medium priority
 
@@ -494,8 +416,8 @@ the file lands in `raw/`.
 - [~] **Web UI for wiki search** — *not needed*
   Karpathy built this because he had no Obsidian. mindsync uses Obsidian as the vault IDE, which already provides search, graph view, backlinks, and previews. `/mindsync search` covers the semantic qmd layer inside agent sessions. No gap to fill.
 
-- [x] **Output auto-filing** 🟡
-  When `summarize` or `agent-browser` produces output during a session, automatically route it to `raw/` and queue it for ingest. Runtime hooks improve this when available.
+- [x] **Output filing** 🟡
+  When `summarize` or `agent-browser` produces output during a session, save it to `raw/` and run `/mindsync ingest` when you want it compiled.
 
 - [x] **Domain-specific ingest templates** 🟡
   Custom templates per source type: journal entries, research papers, podcast transcripts, and GitHub repos each get a purpose-built structure.
@@ -532,7 +454,7 @@ mindsync is built on the shoulders of these projects and ideas:
 | [LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) | [@karpathy](https://github.com/karpathy) | The core idea: LLM as wiki maintainer, not just retriever. The pattern this entire project implements. |
 | [qmd](https://github.com/tobi/qmd) | [@tobi](https://github.com/tobi) | Local hybrid BM25/vector search for markdown files. Powers semantic search across the wiki. |
 | [summarize](https://github.com/steipete/summarize) | [@steipete](https://github.com/steipete) | Converts URLs, PDFs, YouTube, and podcasts into markdown. The primary source ingestion accelerator. |
-| [agent-browser](https://github.com/vercel-labs/agent-browser) | [Vercel Labs](https://github.com/vercel-labs) | Rust-based browser automation CLI for AI agents. Lets agents browse the web autonomously. |
+| [agent-browser](https://github.com/vercel-labs/agent-browser) | [Vercel Labs](https://github.com/vercel-labs) | Rust-based browser control CLI for AI agents. Lets agents browse web pages during explicit sessions. |
 | [Memex (1945)](https://en.wikipedia.org/wiki/Memex) | Vannevar Bush | The original vision of a personal, associative knowledge machine. LLM Wiki is its modern realization. |
 | [Obsidian](https://obsidian.md) | Obsidian | Optional markdown editor with graph view, backlinks, and Web Clipper. The recommended vault IDE. |
 

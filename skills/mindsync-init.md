@@ -1,6 +1,6 @@
 ---
 name: mindsync-init
-description: Initialize a portable LLM Wiki vault with AGENTS.md, Claude compatibility, deterministic state, scripts, qmd, and optional hooks
+description: Initialize a portable LLM Wiki vault with AGENTS.md, Claude compatibility, deterministic state, scripts, qmd, and explicit user-action ingest
 trigger: /mindsync init
 metadata:
   openclaw:
@@ -14,7 +14,8 @@ metadata:
 # /mindsync init
 
 Initialize a project-local mindsync vault. Prefer project-local install and
-zero-touch automation unless the user explicitly asks otherwise.
+explicit user-action ingest. Do not install hooks, watchers, cron jobs, or
+background activity.
 
 ## 1. Collect Inputs
 
@@ -23,13 +24,14 @@ Ask for any missing values:
 - Name
 - Wiki purpose/domain
 - Assistant priority
-- Vault path
+- Vault path (`./mindsync` by default; use `.` only for the legacy root-vault layout)
 
 Defaults:
 
 - Agent adapters: `claude`, `codex`, `openclaw`
-- Automation: `zero-touch`
+- Mode: `action-first`
 - Scope: project-local
+- Vault path: `./mindsync`
 
 ## 2. Locate Helper
 
@@ -51,11 +53,11 @@ Run:
 
 ```bash
 python3 "$HELPER" init \
-  --vault "VAULT_PATH" \
+  --vault "./mindsync" \
   --name "NAME" \
   --domain "DOMAIN" \
   --priority "PRIORITY" \
-  --automation zero-touch \
+  --mode action-first \
   --agent claude \
   --agent codex \
   --agent openclaw
@@ -63,104 +65,78 @@ python3 "$HELPER" init \
 
 This creates:
 
-- `AGENTS.md` as the canonical agent-neutral instruction file
-- `CLAUDE.md` as Claude compatibility
-- `_hot.md`, `index.md`, `log.md`
-- `raw/`, `raw/assets/`, `wiki/`, `wiki/analyses/assets/`
-- `.mindsync/config.json`
-- `.mindsync/state/pending-ingest.json`
-- `.mindsync/state/source-hashes.json`
-- `.mindsync/state/enrichment-queue.json`
-- local `scripts/`
+- a root `AGENTS.md` pointer if one does not already exist
+- `mindsync/AGENTS.md` as the canonical agent-neutral instruction file
+- `mindsync/CLAUDE.md` as Claude compatibility
+- `mindsync/_hot.md`, `mindsync/index.md`, `mindsync/log.md`
+- `mindsync/raw/`, `mindsync/raw/assets/`, `mindsync/wiki/`, `mindsync/wiki/analyses/assets/`
+- `mindsync/.mindsync/config.json`
+- `mindsync/.mindsync/state/pending-ingest.json`
+- `mindsync/.mindsync/state/source-hashes.json`
+- `mindsync/.mindsync/state/enrichment-queue.json`
+- local `mindsync/scripts/`
+
+If root `AGENTS.md` already exists, do not overwrite it. Print the suggested
+MindSync pointer snippet and ask the user before changing their root project
+instructions.
+
+Legacy root layout remains available when the user explicitly chooses:
+
+```bash
+python3 "$HELPER" init --vault . --name "NAME" --domain "DOMAIN" --priority "PRIORITY"
+```
 
 ## 4. Required Tool Setup
 
 Check:
 
 ```bash
-python3 scripts/mindsync.py tool-path --vault "VAULT_PATH" qmd || true
-python3 scripts/mindsync.py tool-path --vault "VAULT_PATH" summarize || true
-python3 scripts/mindsync.py tool-path --vault "VAULT_PATH" agent-browser || true
+python3 mindsync/scripts/mindsync.py tool-path --vault mindsync qmd || true
+python3 mindsync/scripts/mindsync.py tool-path --vault mindsync summarize || true
+python3 mindsync/scripts/mindsync.py tool-path --vault mindsync agent-browser || true
 ```
 
 Offer project-local installs:
 
 ```bash
-python3 scripts/mindsync.py ensure-tools --vault "VAULT_PATH" --tool qmd --tool summarize
+python3 mindsync/scripts/mindsync.py ensure-tools --vault mindsync --tool qmd --tool summarize
 ```
 
 Offer optional browser install only when the user wants autonomous browsing:
 
 ```bash
-python3 scripts/mindsync.py ensure-tools --vault "VAULT_PATH" --tool agent-browser
+python3 mindsync/scripts/mindsync.py ensure-tools --vault mindsync --tool agent-browser
 ```
 
 If qmd is installed, run:
 
 ```bash
-cd "VAULT_PATH"
-QMD=$(python3 scripts/mindsync.py tool-path --vault . qmd)
-"$QMD" collection add "VAULT_PATH/wiki" --name "WIKI_NAME" || true
+QMD=$(python3 mindsync/scripts/mindsync.py tool-path --vault mindsync qmd)
+"$QMD" collection add "mindsync/wiki" --name "WIKI_NAME" || true
 "$QMD" context add "qmd://WIKI_NAME" "DOMAIN" || true
-python3 scripts/mindsync.py embed --vault .
+python3 mindsync/scripts/mindsync.py embed --vault mindsync
 ```
 
-## 5. Zero-Touch Hooks
+## 5. Action-First Ingest
 
-Ask before installing hooks if the agent runtime supports them. For Claude Code:
+Do not install Claude hooks, Codex hooks, launchd jobs, cron jobs, or file
+watchers. Raw files are source records. They are processed only when the user
+asks an agent to ingest them.
+
+When the user asks to ingest, run:
 
 ```bash
-mkdir -p "VAULT_PATH/.claude"
+python3 mindsync/scripts/mindsync.py queue-scan --vault mindsync
+python3 mindsync/scripts/mindsync.py pending --vault mindsync
 ```
 
-Write or merge `VAULT_PATH/.claude/settings.json` with:
-
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash scripts/hook-prompt-submit.sh"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash scripts/hook-auto-ingest.sh"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash scripts/hook-session-end.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-Then schedule file watching:
+Then compile pending items into `wiki/`, update `index.md` and `log.md`, mark
+sources ingested, and refresh qmd:
 
 ```bash
-bash "VAULT_PATH/scripts/schedule-embed.sh" "VAULT_PATH"
+python3 mindsync/scripts/mindsync.py mark-ingested --vault mindsync --path "raw/path.md" --page "wiki/sources/YYYY-MM-DD-slug.md"
+python3 mindsync/scripts/mindsync.py embed --vault mindsync
 ```
-
-For Codex/OpenClaw, keep the deterministic queue active and use `AGENTS.md`;
-runtime-specific hook installation can be added by the adapter.
 
 ## 6. Confirm
 
@@ -168,7 +144,7 @@ Report:
 
 - Vault path
 - Agent adapters
-- Automation mode
+- Mode
 - qmd status
-- Hook/watch status
-- First action: drop a source into `raw/` or `raw/assets/`, then run `/mindsync ingest`
+- Action-first ingest status
+- First action: drop a source into `mindsync/raw/` or `mindsync/raw/assets/`, then run `/mindsync ingest`

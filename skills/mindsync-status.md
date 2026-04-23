@@ -52,8 +52,6 @@ Report:
 - `_hot.md` word count
 - last five log entries
 - qmd status or stale/unknown state
-- watcher health from `doctor`
-- latest automation error from `.mindsync/state/automation.log`
 - enrichment queue counts from `.mindsync/state/enrichment-queue.json`
 
 Do not append to `log.md`.
