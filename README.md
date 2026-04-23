@@ -60,7 +60,7 @@ Installed components depend on the selected agent:
 | Scripts | `scripts/` or agent-local script folder | Deterministic queues, lint, charts, exports |
 | Local tools | `.mindsync/tools/` | Required project-local npm CLIs: qmd and summarize |
 
-The canonical project instruction file is `AGENTS.md`. `CLAUDE.md` is generated for Claude compatibility.
+The canonical project instruction file is `AGENTS.md`. `CLAUDE.md` is generated for Claude compatibility. The instruction guardrails are also informed by [forrestchang/andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills), adapted here for mindsync's wiki workflow.
 
 ## Requirements
 
@@ -452,6 +452,7 @@ mindsync is built on the shoulders of these projects and ideas:
 | Project | Author | What it contributes |
 |---------|--------|---------------------|
 | [LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) | [@karpathy](https://github.com/karpathy) | The core idea: LLM as wiki maintainer, not just retriever. The pattern this entire project implements. |
+| [andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills) | [@forrestchang](https://github.com/forrestchang) | A concise CLAUDE/skill packaging of Karpathy-style execution guardrails. mindsync adapts that framing for its generated `AGENTS.md` and `CLAUDE.md`. |
 | [qmd](https://github.com/tobi/qmd) | [@tobi](https://github.com/tobi) | Local hybrid BM25/vector search for markdown files. Powers semantic search across the wiki. |
 | [summarize](https://github.com/steipete/summarize) | [@steipete](https://github.com/steipete) | Converts URLs, PDFs, YouTube, and podcasts into markdown. The primary source ingestion accelerator. |
 | [agent-browser](https://github.com/vercel-labs/agent-browser) | [Vercel Labs](https://github.com/vercel-labs) | Rust-based browser control CLI for AI agents. Lets agents browse web pages during explicit sessions. |
